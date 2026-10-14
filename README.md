@@ -13,7 +13,7 @@ scrape → normalize → deduplicate → filter → score → tailor → deliver
 Requires [uv](https://docs.astral.sh/uv/) (it installs the right Python for you).
 
 ```bash
-git clone https://github.com/aritra1311/werkbot.git
+git clone https://github.com/AdityapravaSen/werkbot.git
 cd werkbot
 uv sync --group dev          # creates .venv and installs everything
 cp .env.example .env         # then add your API keys
