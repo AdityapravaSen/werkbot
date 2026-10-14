@@ -5,6 +5,7 @@ data/*.db
 data/*.db-*
 output/*
 !output/.gitkeep
+.vscode/
 
 # Python
 __pycache__/
