@@ -1,0 +1,35 @@
+# --- Personal data: NEVER commit (this repo is public) ---
+.env
+data/master_resume.yaml
+data/*.db
+data/*.db-*
+output/*
+!output/.gitkeep
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+dist/
+build/
+
+# Notebooks
+.ipynb_checkpoints/
+notebooks/*.ipynb
+
+# LaTeX build files
+*.aux
+*.log
+*.out
+*.synctex.gz
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/

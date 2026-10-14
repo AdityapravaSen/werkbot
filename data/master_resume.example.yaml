@@ -1,0 +1,50 @@
+# Copy to data/master_resume.yaml (git-ignored) and fill in your real details.
+# This is the single source of truth: the LLM may select, reorder and reword
+# bullets from here, but never invent new skills or experience.
+
+basics:
+  name: Your Name
+  email: you@example.com
+  phone: "+49 ..."
+  location: Kaiserslautern, Germany
+  links:
+    github: https://github.com/your-handle
+    linkedin: https://www.linkedin.com/in/your-handle
+
+summary_variants:
+  - id: ml
+    text: ML engineer with production experience in ...
+  - id: data_eng
+    text: Data engineer experienced with large-scale pipelines in ...
+
+education:
+  - school: University name
+    degree: MSc ...
+    start: 2026-10
+    end: present
+    details: []
+
+experience:
+  - company: Company name
+    role: ML Engineer
+    location: City
+    start: 2022-07
+    end: 2025-08
+    bullets:
+      - text: Built ... using PySpark, reducing ... by 40%.
+        tags: [pyspark, data-engineering, ml]
+      - text: Validated ... models for model risk management.
+        tags: [ml, model-risk, python]
+
+projects:
+  - name: werkbot
+    link: https://github.com/your-handle/werkbot
+    bullets:
+      - text: Built a job-search pipeline that scrapes 14 sources, deduplicates and scores postings.
+        tags: [python, scraping, llm]
+
+skills:
+  languages: [Python, Scala, SQL]
+  data: [PySpark, Snowflake, Hive, Databricks]
+  ml: [scikit-learn, PyTorch, NLP]
+  spoken: ["English (fluent)", "German (A2)"]

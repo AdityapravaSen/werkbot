@@ -1,0 +1,128 @@
+# All job sources. Adding or removing a site is a config change, not a code change.
+# group: A = API/feed, B = HTML with pages, C = JavaScript-loaded, D = page watcher, E = LinkedIn
+# adapter: name of the adapter in src/werkbot/adapters/
+
+# ---------- Group A: API or feed ----------
+- name: arbeitnow
+  group: A
+  adapter: arbeitnow
+  url: https://www.arbeitnow.com/api/job-board-api
+  params:
+    keywords: ["working student", "werkstudent"]
+  notes: No search parameter. Fetch all pages, filter keywords and age locally.
+
+- name: arbeitsagentur
+  group: A
+  adapter: arbeitsagentur
+  url: https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobs
+  params:
+    was: Werkstudent/in
+    wo: Kaiserslautern
+    umkreis: 200
+    veroeffentlichtseit: 7
+    branche: 11
+  notes: Public Jobsuche API used by arbeitsagentur.de itself.
+
+- name: ramstein_softgarden
+  group: A
+  adapter: softgarden_feed
+  url: https://ramsteinaf.career.softgarden.de/jobs.feed.json
+  params:
+    categories: ["Engineering and technical Jobs", "IT"]
+    locations: ["Ramstein-Miesenbach", "Kaiserslautern"]
+  notes: Local national positions.
+
+- name: wearedevelopers
+  group: A
+  adapter: wearedevelopers
+  url: https://www.wearedevelopers.com/jobs.turbo_stream
+  params:
+    q: working student
+    country: DE
+  notes: The "Load more" endpoint. Request page=1,2,... until empty.
+
+# ---------- Group B: HTML with page numbers ----------
+- name: connecticum
+  group: B
+  adapter: connecticum
+  url: https://www.connecticum.de/jobs?details=&beschaeftigungsarten%5B0%5D=6&fieldsgruppen%5B0%5D=11&einsatzort=Kaiserslautern%2C+Germany&umkreis=200&volltext=
+  notes: "?page=N, 20 per page; stop when there is no 'Weiter' link."
+
+- name: efellows
+  group: B
+  adapter: efellows
+  url: https://jobs.e-fellows.net/jobs/it/werkstudent-duales-studium
+  notes: "?page=N; dates are relative ('vor 1 Monat')."
+
+- name: fraunhofer
+  group: B
+  adapter: fraunhofer
+  url: https://jobs.fraunhofer.de/search/?q=&optionsFacetsDD_customfield5=Rhineland-Palatinate&optionsFacetsDD_lang=en
+  notes: Posted date is on each job's detail page. Also appears on connecticum (dedup).
+
+- name: germantechjobs
+  group: B
+  adapter: germantechjobs
+  url: https://germantechjobs.de/en
+  notes: All jobs are in the HTML. Apply English and part-time filters ourselves.
+
+- name: workingstudentjobs
+  group: B
+  adapter: workingstudentjobs
+  url: https://www.workingstudentjobs.de/?city=mannheim,heidelberg,frankfurt&state=RP,SL&field=tech
+  notes: Follow Next links.
+
+# ---------- Group C: JavaScript-loaded (inspect network requests first) ----------
+- name: foorilla
+  group: C
+  adapter: foorilla
+  url: https://foorilla.com/hiring/
+  enabled: false
+  params:
+    job_type: Part-time
+    language: English
+    country: Germany
+  notes: Find the hidden request the filters send; Playwright as fallback.
+
+- name: dfki
+  group: C
+  adapter: dfki
+  url: https://jobs.dfki.de/ausschreibungen.html#filter=p_web_site_id%3D6635%26p_published_to%3DWWW%26p_language%3DDEFAULT%26p_direct%3DY%26p_format%3DMOBILE%26p_include_exclude_from_list%3DN%26p_category_code_arr%3D23427-662551%26p_search%3D
+  enabled: false
+  notes: Table is filled by JavaScript; look for the JSON call behind it.
+
+# ---------- Group D: page watchers ----------
+- name: mpi_inf_d2
+  group: D
+  adapter: page_watch
+  url: https://www.mpi-inf.mpg.de/departments/computer-vision-and-machine-learning/application/hiwi-/-student-assistants
+  notes: General HiWi call. Alert on change. Cold-email target.
+
+- name: mpi_inf_d6
+  group: D
+  adapter: page_watch
+  url: https://www.mpi-inf.mpg.de/departments/visual-computing-and-artificial-intelligence/offers
+  notes: No HiWi openings listed. Alert on change. Cold-email target.
+
+# ---------- Group E: LinkedIn ----------
+- name: linkedin_local
+  group: E
+  adapter: linkedin
+  url: https://www.linkedin.com/jobs/
+  params:
+    search_term: working student
+    location: Kaiserslautern, Germany
+    distance: 100      # miles, about 160 km
+    hours_old: 168     # 7 days
+    results_wanted: 50
+
+- name: linkedin_remote
+  group: E
+  adapter: linkedin
+  url: https://www.linkedin.com/jobs/
+  params:
+    search_term: working student
+    location: Germany
+    is_remote: true
+    hours_old: 168
+    results_wanted: 50
