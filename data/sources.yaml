@@ -8,20 +8,27 @@
   adapter: arbeitnow
   url: https://www.arbeitnow.com/api/job-board-api
   params:
-    keywords: ["working student", "werkstudent"]
+    keywords: ["working student", "werkstudent", "studentische", "student assistant"]
+    delay_s: 3        # rate-limits at ~1 request/second
+    max_pages: 40
   notes: No search parameter. Fetch all pages, filter keywords and age locally.
 
 - name: arbeitsagentur
   group: A
   adapter: arbeitsagentur
-  url: https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobs
+  url: https://rest.arbeitsagentur.de/jobboerse/jobsuche-service
   params:
-    was: Werkstudent/in
+    was: Werkstudent
     wo: Kaiserslautern
     umkreis: 200
     veroeffentlichtseit: 7
-    branche: 11
-  notes: Public Jobsuche API used by arbeitsagentur.de itself.
+    size: 100
+    fetch_details: true   # one extra request per job, for the description
+    max_details: 200
+    delay_s: 1
+  notes: >-
+    Public Jobsuche API used by arbeitsagentur.de itself. The website's branche=11
+    (IT) filter is not available in the API, so our own filters narrow it down.
 
 - name: ramstein_softgarden
   group: A
