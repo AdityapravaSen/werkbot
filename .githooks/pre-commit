@@ -1,0 +1,16 @@
+#!/bin/sh
+# Runs automatically on every `git commit` (enabled with: git config core.hooksPath .githooks).
+# Formats the Python files being committed, re-stages them, and blocks the commit if lint fails.
+
+files=$(git diff --cached --name-only --diff-filter=ACMR -- '*.py')
+[ -z "$files" ] && exit 0
+
+echo "pre-commit: formatting $(echo "$files" | wc -l | tr -d ' ') Python file(s) with ruff"
+uv run ruff format $files || exit 1
+if ! uv run ruff check --fix $files; then
+    echo ""
+    echo "pre-commit: ruff found problems it cannot fix automatically (listed above)."
+    echo "Fix them, then run git commit again."
+    exit 1
+fi
+git add $files
