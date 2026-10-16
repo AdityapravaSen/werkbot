@@ -6,6 +6,7 @@ import sys
 import typer
 from loguru import logger
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from werkbot import __version__, db
@@ -97,12 +98,16 @@ def scrape(
     console.print(f"\n[bold]{len(all_jobs)} jobs total[/bold], {failed} source(s) failed")
 
     if show and all_jobs:
-        table = Table("Posted", "Title", "Company", "Location", "Source")
+        table = Table("Posted", "Title (Ctrl+click to open)", "Company", "Location", "Source")
         for j in all_jobs[:show]:
             posted = j.date_posted.strftime("%Y-%m-%d") if j.date_posted else "?"
             where = "remote" if j.remote else (j.location or "?")
-            table.add_row(posted, j.title, j.company, where, j.source)
+            title = f"[link={j.url}]{escape(j.title)}[/link]"
+            table.add_row(posted, title, escape(j.company), escape(where), j.source)
         console.print(table)
+        console.print(
+            "[dim]All fields incl. links and descriptions: output/raw/<source>.json[/dim]"
+        )
 
 
 @app.command("check-db")

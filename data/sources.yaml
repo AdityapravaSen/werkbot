@@ -35,18 +35,41 @@
   adapter: softgarden_feed
   url: https://ramsteinaf.career.softgarden.de/jobs.feed.json
   params:
-    categories: ["Engineering and technical Jobs", "IT"]
     locations: ["Ramstein-Miesenbach", "Kaiserslautern"]
-  notes: Local national positions.
+    # The feed has no category field, so "IT / Engineering" is matched on the title.
+    # Short words like "IT" must match as a whole word (not inside "Mitarbeiter").
+    title_keywords:
+      - IT
+      - Informatik
+      - Software
+      - System
+      - Netzwerk
+      - Network
+      - Daten
+      - Data
+      - Cyber
+      - Admin
+      - Ingenieur
+      - Engineer
+      - Techniker
+      - Elektro
+      - Werkstudent
+      - Praktik
+      - Student
+  notes: US Air Force local national positions. Feed lists all jobs (no date filter).
 
 - name: wearedevelopers
   group: A
   adapter: wearedevelopers
-  url: https://www.wearedevelopers.com/jobs.turbo_stream
+  url: https://www.wearedevelopers.com/jobs.md
   params:
     q: working student
     country: DE
-  notes: The "Load more" endpoint. Request page=1,2,... until empty.
+    delay_s: 2
+    max_pages: 15     # 24 jobs per page
+  notes: >-
+    Markdown version of the search (stable plain text). No description in the
+    list; the job page link is kept for later. Apply links are stored as apply_url.
 
 # ---------- Group B: HTML with page numbers ----------
 - name: connecticum

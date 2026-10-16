@@ -10,6 +10,11 @@ To add an adapter:
 from werkbot.adapters.base import REGISTRY, Adapter, register
 
 # Importing a module registers its adapter.
-from werkbot.adapters import arbeitnow, arbeitsagentur  # noqa: E402, F401  isort: skip
+from werkbot.adapters import (  # noqa: E402, F401  isort: skip
+    arbeitnow,
+    arbeitsagentur,
+    softgarden,
+    wearedevelopers,
+)
 
 __all__ = ["REGISTRY", "Adapter", "register"]

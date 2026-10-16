@@ -10,14 +10,14 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 | Phase | What | Status |
 |---|---|---|
 | 0 | Project setup | ✅ Done |
-| 1 | Scrapers | 🟡 In progress (2 of 14 sources) |
+| 1 | Scrapers | 🟡 In progress (4 of 14 sources, Group A done) |
 | 2 | Deduplication | ⬜ Not started |
 | 3 | Filtering (language, location, role) | ⬜ Not started |
 | 4 | Fit scoring | ⬜ Not started |
 | 5 | Resume + cover letter tailoring (LaTeX) | ⬜ Not started |
 | 6 | Delivery + daily schedule | ⬜ Not started |
 
-**Tests:** 16 passing · **Branch:** `phase-1-scrapers`
+**Tests:** 24 passing · **Branch:** `phase-1-scrapers`
 
 ---
 
@@ -27,8 +27,8 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 |---|---|---|---|---|
 | 1 | Arbeitnow | A (API) | ✅ Working | Rate-limits at ~1 req/s, so we use a 3s delay |
 | 2 | Arbeitsagentur | A (API) | ✅ Working | ~189 results for the default search |
-| 3 | Ramstein AF (softgarden) | A (feed) | ⬜ Next | |
-| 4 | WeAreDevelopers | A (load-more endpoint) | ⬜ Next | |
+| 3 | Ramstein AF (softgarden) | A (feed) | ✅ Working | No category in feed; filtered by city + title keywords |
+| 4 | WeAreDevelopers | A (Markdown list) | ✅ Working | ~204 results, 24 per page; no description in the list |
 | 5 | connecticum | B (HTML) | ⬜ | |
 | 6 | e-fellows | B (HTML) | ⬜ | |
 | 7 | Fraunhofer | B (HTML) | ⬜ | |
@@ -42,6 +42,13 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 ---
 
 ## Changelog
+
+### 2026-10-16
+- **softgarden feed adapter** (`adapters/softgarden.py`): reads any softgarden career site's `jobs.feed.json`. Used for Ramstein AF, filtered by city and title keywords.
+- **WeAreDevelopers adapter** (`adapters/wearedevelopers.py`): reads the Markdown version of the search (`jobs.md`) page by page until there is no "Next page" link.
+- **`apply_url`** field on `Job`: the direct application link when a source provides one (WeAreDevelopers does).
+- **`matches_keyword`** in `text.py`: short keywords like "IT" must be whole words ("IT-Support" yes, "Mitarbeiter" no).
+- **CLI:** titles in the `--show` table are clickable links (Ctrl+click in the VS Code terminal).
 
 ### 2026-10-15
 - **Arbeitsagentur adapter** (`adapters/arbeitsagentur.py`): search via the Jobsuche API, then one details request per job for the description. Reads the 2026 response format, with the old format as a fallback. Warns when results exist but can't be read.
@@ -61,6 +68,8 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 
 | Date | Problem | Cause | Fix |
 |---|---|---|---|
+| 10-16 | `Activate.ps1 cannot be loaded … running scripts is disabled` when opening a terminal | Windows blocks PowerShell scripts by default; VS Code tries to auto-activate `.venv` | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` (or ignore it: `uv run` doesn't need activation) |
+| 10-16 | Ramstein feed has no IT/Engineering category | The JSON feed only has title, location, date, description | Filter on title keywords (configurable in `sources.yaml`) |
 | 10-15 | Arbeitsagentur returned **0 jobs** even though the API reported 189 | The API renamed nearly every field (`stellenangebote` → `ergebnisliste`, `refnr` → `referenznummer`, `titel` → `stellenangebotsTitel`, `arbeitgeber` → `firma`). The public spec on GitHub is outdated. | Read the new names, keep the old ones as a fallback, warn when "jobs exist but none readable". Tests now use the real format. |
 | 10-15 | `ImportError … partially initialized module (circular import)` | The new adapter file was missing or misnamed on disk. Python's message is misleading. | Saved the file with the correct name. Check with `Get-ChildItem src\werkbot\adapters`. |
 | 10-15 | Fix seemed to have no effect (still 1s delay, `fail`) | The zip was extracted to the wrong place, so the old files were still in use | Switched to sending individual files with exact paths, no more zips |
@@ -86,15 +95,21 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 | Adapters return partial results on errors | A blocked page shouldn't throw away everything already collected |
 | Dropped datacareer, absolventa, academics.de | Not worth the effort |
 | Arbeitsagentur: no `branche` (IT) filter | Not supported by the API; our own filters handle it in Phase 3 |
+| WeAreDevelopers: read Markdown, not HTML cards | Plain text with labelled fields; far less likely to break on a redesign |
 | Fit score, not "chance of getting hired" | No tool can predict hiring honestly |
 
 **Open:** output format. The plan says Telegram; the later discussion favoured a static website + optional Telegram notification (no server). To decide before Phase 6.
 
 ---
 
+## Known gaps
+
+- **WeAreDevelopers has no description** in the list. Fit scoring needs one, so job pages will be fetched later (after dedup + filtering, to avoid ~200 extra requests).
+- **The same job can appear twice within one source** (e.g. Ramstein posts one listing per open position). Phase 2 merges them.
+
 ## Next
 
-1. Ramstein AF (softgarden JSON feed)
-2. WeAreDevelopers (load-more endpoint)
-3. Group B HTML adapters
-4. Add the "results exist but none readable" check to every adapter
+1. Group B HTML adapters: connecticum, e-fellows, Fraunhofer, germantechjobs, workingstudentjobs
+2. Group E: LinkedIn (python-jobspy)
+3. Group D: MPI page watchers
+4. Group C: foorilla, DFKI (find hidden endpoints)

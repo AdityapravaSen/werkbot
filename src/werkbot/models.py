@@ -31,8 +31,9 @@ class Job(BaseModel):
 
     title: str
     company: str
-    url: HttpUrl
+    url: HttpUrl  # the job page on the source site
     source: str
+    apply_url: HttpUrl | None = None  # where to apply, if the source gives a separate link
     source_job_id: str | None = None
     location: str | None = None
     remote: bool = False
