@@ -1,16 +1,33 @@
 """Command-line interface: `werkbot <command>`."""
 
+import json
+import sys
+
 import typer
+from loguru import logger
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from werkbot import __version__, db
 from werkbot.adapters import REGISTRY
 from werkbot.config import get_settings
+from werkbot.models import Job
 from werkbot.sources import load_sources
 
 app = typer.Typer(help="Find English-speaking Werkstudent jobs and tailor your applications.")
 console = Console()
+
+
+@app.callback()
+def main(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show every HTTP request."),
+) -> None:
+    """Runs before every command: set how much logging is shown."""
+    logger.remove()
+    logger.add(
+        sys.stderr, level="DEBUG" if verbose else "INFO", format="{time:HH:mm:ss} | {message}"
+    )
 
 
 @app.command()
@@ -41,20 +58,56 @@ def sources(all: bool = typer.Option(False, "--all", help="Include disabled sour
 @app.command()
 def scrape(
     source: str = typer.Option(None, "--source", "-s", help="Run only this source."),
+    show: int = typer.Option(0, "--show", help="Print the first N jobs as a table."),
 ) -> None:
-    """Scrape all enabled sources (adapters are added in Phase 1)."""
+    """Scrape enabled sources and save the raw results to output/raw/<source>.json."""
     settings = get_settings()
     selected = [s for s in load_sources(settings.sources_path) if source in (None, s.name)]
     if not selected:
         console.print(f"[red]No enabled source named {source!r}[/red]")
         raise typer.Exit(1)
+
+    raw_dir = settings.output_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+    all_jobs: list[Job] = []
+    failed = 0
+
     for s in selected:
         adapter_cls = REGISTRY.get(s.adapter)
         if adapter_cls is None:
             console.print(f"[yellow]skip[/yellow] {s.name}: adapter '{s.adapter}' not built yet")
             continue
-        jobs = adapter_cls(s, settings).fetch()
-        console.print(f"[green]ok[/green]   {s.name}: {len(jobs)} jobs")
+        adapter = adapter_cls(s, settings)
+        try:
+            jobs = adapter.fetch()
+        except Exception as exc:  # one broken site must not stop the others
+            failed += 1
+            console.print(f"[red]fail[/red] {s.name}: {type(exc).__name__}: {exc}")
+            continue
+        out = raw_dir / f"{s.name}.json"
+        out.write_text(
+            json.dumps([j.model_dump(mode="json") for j in jobs], indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+        all_jobs.extend(jobs)
+        status = "[yellow]partial[/yellow]" if adapter.warnings else "[green]ok[/green]     "
+        console.print(f"{status} {s.name}: {len(jobs)} jobs → {out}")
+        for warning in adapter.warnings:
+            console.print(f"          [yellow]↳ {warning}[/yellow]")
+
+    console.print(f"\n[bold]{len(all_jobs)} jobs total[/bold], {failed} source(s) failed")
+
+    if show and all_jobs:
+        table = Table("Posted", "Title (Ctrl+click to open)", "Company", "Location", "Source")
+        for j in all_jobs[:show]:
+            posted = j.date_posted.strftime("%Y-%m-%d") if j.date_posted else "?"
+            where = "remote" if j.remote else (j.location or "?")
+            title = f"[link={j.url}]{escape(j.title)}[/link]"
+            table.add_row(posted, title, escape(j.company), escape(where), j.source)
+        console.print(table)
+        console.print(
+            "[dim]All fields incl. links and descriptions: output/raw/<source>.json[/dim]"
+        )
 
 
 @app.command("check-db")

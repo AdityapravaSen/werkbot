@@ -8,38 +8,68 @@
   adapter: arbeitnow
   url: https://www.arbeitnow.com/api/job-board-api
   params:
-    keywords: ["working student", "werkstudent"]
+    keywords: ["working student", "werkstudent", "studentische", "student assistant"]
+    delay_s: 3        # rate-limits at ~1 request/second
+    max_pages: 40
   notes: No search parameter. Fetch all pages, filter keywords and age locally.
 
 - name: arbeitsagentur
   group: A
   adapter: arbeitsagentur
-  url: https://rest.arbeitsagentur.de/jobboerse/jobsuche-service/pc/v4/jobs
+  url: https://rest.arbeitsagentur.de/jobboerse/jobsuche-service
   params:
-    was: Werkstudent/in
+    was: Werkstudent
     wo: Kaiserslautern
     umkreis: 200
     veroeffentlichtseit: 7
-    branche: 11
-  notes: Public Jobsuche API used by arbeitsagentur.de itself.
+    size: 100
+    fetch_details: true   # one extra request per job, for the description
+    max_details: 200
+    delay_s: 1
+  notes: >-
+    Public Jobsuche API used by arbeitsagentur.de itself. The website's branche=11
+    (IT) filter is not available in the API, so our own filters narrow it down.
 
 - name: ramstein_softgarden
   group: A
   adapter: softgarden_feed
   url: https://ramsteinaf.career.softgarden.de/jobs.feed.json
   params:
-    categories: ["Engineering and technical Jobs", "IT"]
     locations: ["Ramstein-Miesenbach", "Kaiserslautern"]
-  notes: Local national positions.
+    # The feed has no category field, so "IT / Engineering" is matched on the title.
+    # Short words like "IT" must match as a whole word (not inside "Mitarbeiter").
+    title_keywords:
+      - IT
+      - Informatik
+      - Software
+      - System
+      - Netzwerk
+      - Network
+      - Daten
+      - Data
+      - Cyber
+      - Admin
+      - Ingenieur
+      - Engineer
+      - Techniker
+      - Elektro
+      - Werkstudent
+      - Praktik
+      - Student
+  notes: US Air Force local national positions. Feed lists all jobs (no date filter).
 
 - name: wearedevelopers
   group: A
   adapter: wearedevelopers
-  url: https://www.wearedevelopers.com/jobs.turbo_stream
+  url: https://www.wearedevelopers.com/jobs.md
   params:
     q: working student
     country: DE
-  notes: The "Load more" endpoint. Request page=1,2,... until empty.
+    delay_s: 2
+    max_pages: 15     # 24 jobs per page
+  notes: >-
+    Markdown version of the search (stable plain text). No description in the
+    list; the job page link is kept for later. Apply links are stored as apply_url.
 
 # ---------- Group B: HTML with page numbers ----------
 - name: connecticum

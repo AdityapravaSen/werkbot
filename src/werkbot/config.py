@@ -22,6 +22,8 @@ class Settings(BaseSettings):
 
     # Polite scraping defaults
     request_timeout_s: float = 30.0
+    request_delay_s: float = 1.0  # pause between pages of the same site
+    max_retries: int = 5
     max_parallel_requests: int = 5
     user_agent: str = "werkbot/0.1 (personal job search tool)"
 
