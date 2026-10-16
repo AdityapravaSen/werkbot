@@ -41,3 +41,6 @@ class Job(BaseModel):
     date_posted: datetime | None = None
     job_types: list[str] = Field(default_factory=list)
     language: str | None = None  # filled in by the language filter
+    # Some sources state this directly (germantechjobs, workingstudentjobs).
+    # None = unknown; the Phase 3 language filter then decides from the text.
+    german_required: bool | None = None

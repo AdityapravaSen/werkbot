@@ -71,36 +71,56 @@
     Markdown version of the search (stable plain text). No description in the
     list; the job page link is kept for later. Apply links are stored as apply_url.
 
-# ---------- Group B: HTML with page numbers ----------
+# ---------- Group B: HTML pages and data embedded in pages ----------
 - name: connecticum
   group: B
   adapter: connecticum
   url: https://www.connecticum.de/jobs?details=&beschaeftigungsarten%5B0%5D=6&fieldsgruppen%5B0%5D=11&einsatzort=Kaiserslautern%2C+Germany&umkreis=200&volltext=
-  notes: "?page=N, 20 per page; stop when there is no 'Weiter' link."
+  params:
+    delay_s: 2
+    max_pages: 10     # 20 per page; follows the rel="next" link
+  notes: HTML job cards. Mostly German-language ads.
 
 - name: efellows
   group: B
   adapter: efellows
   url: https://jobs.e-fellows.net/jobs/it/werkstudent-duales-studium
-  notes: "?page=N; dates are relative ('vor 1 Monat')."
+  params:
+    delay_s: 2
+    max_pages: 10     # 10 per page
+  notes: Reads the __NEXT_DATA__ JSON embedded in the page (exact dates, stable).
 
 - name: fraunhofer
   group: B
   adapter: fraunhofer
   url: https://jobs.fraunhofer.de/search/?q=&optionsFacetsDD_customfield5=Rhineland-Palatinate&optionsFacetsDD_lang=en
-  notes: Posted date is on each job's detail page. Also appears on connecticum (dedup).
-
-- name: germantechjobs
-  group: B
-  adapter: germantechjobs
-  url: https://germantechjobs.de/en
-  notes: All jobs are in the HTML. Apply English and part-time filters ourselves.
+  params:
+    delay_s: 2
+    max_pages: 10     # pages via &startrow=N
+  notes: SAP SuccessFactors results table. Posted date is only on the detail page.
 
 - name: workingstudentjobs
   group: B
   adapter: workingstudentjobs
   url: https://www.workingstudentjobs.de/?city=mannheim,heidelberg,frankfurt&state=RP,SL&field=tech
-  notes: Follow Next links.
+  params:
+    delay_s: 2
+    max_pages: 10
+  notes: >-
+    Reads the job objects embedded in the page (not the HTML, which also has an
+    unrelated "Trending" sidebar). Gives is_german_required per job.
+
+# germantechjobs moved to Group A: the site is a JavaScript app, but it has a JSON API.
+- name: germantechjobs
+  group: A
+  adapter: germantechjobs
+  url: https://germantechjobs.de/api/jobsLight
+  params:
+    # Matched case-insensitively as substrings of the job's "jobType" / "language".
+    # The scrape log prints every value that exists, so you can adjust these.
+    job_types: ["part-time", "working student", "werkstudent", "intern", "student"]
+    languages: ["English"]
+  notes: One request returns all jobs; jobType and language filters run on our side.
 
 # ---------- Group C: JavaScript-loaded (inspect network requests first) ----------
 - name: foorilla

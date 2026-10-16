@@ -76,6 +76,11 @@ class Adapter(ABC):
     def pause(self) -> None:
         time.sleep(self.delay_s)
 
+    def warn(self, message: str) -> None:
+        """Record a problem (shown as `partial` in the CLI) without stopping the scrape."""
+        logger.warning("{}: {}", self.source.name, message)
+        self.warnings.append(message)
+
     def client(self) -> httpx.Client:
         return httpx.Client(
             timeout=self.settings.request_timeout_s,
