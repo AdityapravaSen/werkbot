@@ -10,14 +10,14 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 | Phase | What | Status |
 |---|---|---|
 | 0 | Project setup | ✅ Done |
-| 1 | Scrapers | 🟡 In progress (9 of 14 sources: Groups A + B done) |
+| 1 | Scrapers | ✅ All 14 sources built (live-testing in progress) |
 | 2 | Deduplication | ⬜ Not started |
 | 3 | Filtering (language, location, role) | ⬜ Not started |
 | 4 | Fit scoring | ⬜ Not started |
 | 5 | Resume + cover letter tailoring (LaTeX) | ⬜ Not started |
 | 6 | Delivery + daily schedule | ⬜ Not started |
 
-**Tests:** 38 passing · **Branch:** `phase-1-scrapers`
+**Tests:** 52 passing · **Branch:** `phase-1-scrapers`
 
 ---
 
@@ -34,14 +34,27 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 | 7 | Fraunhofer | B (HTML table) | ✅ Built | No date in the list (detail page only) |
 | 8 | germantechjobs | **A** (JSON API) | ✅ Built | Site is a JS app; `/api/jobsLight` has `jobType` + `language` |
 | 9 | workingstudentjobs | B (Next.js page payload) | ✅ Built | Gives `is_german_required` per job |
-| 10 | foorilla | C (JavaScript) | ⬜ Disabled | Hidden endpoint not found yet |
-| 11 | DFKI | C (JavaScript) | ⬜ Disabled | Hidden endpoint not found yet |
-| 12–13 | MPI-INF (2 pages) | D (page watch) | ⬜ | |
-| 14 | LinkedIn (2 searches) | E (jobspy) | ⬜ | |
+| 10 | foorilla | C (htmx HTML fragments) | ✅ Built | Quick search `job_search` + our location filter; no company name in the list |
+| 11 | DFKI | C (JSON feed) | ✅ Built | Two searches: Teilzeit + Wissenschaftl. Hilfskraft |
+| 12–13 | MPI-INF (2 pages) | D (page watch) | ✅ Built | Snapshot in `output/watch/`; a change shows up as one "[Page changed]" item |
+| 14 | LinkedIn (2 searches) | E (jobspy) | ✅ Built | Needs `uv sync --group dev --extra linkedin`; no descriptions by default |
 
 ---
 
 ## Changelog
+
+### 2026-10-16 (Group C)
+- **`scripts/probe_network.py`:** opens a page in headless Chromium (Playwright) and records every data request + response. Used to find the hidden endpoints of JavaScript sites.
+- **DFKI adapter** (`adapters/dfki.py`): reads the Hireserve JSON feed (`ic_job_feeds.feed_engine`) the jobs page itself calls. Uses the English long title when available.
+- **foorilla adapter** (`adapters/foorilla.py`): reads the htmx HTML fragments (`/hiring/jobs/?job_search=…&page=N`) and keeps jobs located in Germany.
+- **Setup tests** now check that every source in `sources.yaml` has a built adapter.
+
+### 2026-10-16 (Groups D + E)
+- **LinkedIn adapter** (`adapters/linkedin.py`): runs `python-jobspy` (optional extra). A missing package or a LinkedIn block becomes a warning, not a crash. Tests use fake rows, so CI doesn't need jobspy.
+- **Page watcher** (`adapters/page_watch.py`): extracts a page's main text (trafilatura), compares it with the last snapshot and reports added lines as one "[Page changed]" item. Used for the two MPI-INF pages.
+- **Adapters register themselves:** `adapters/__init__.py` imports every module in the folder, so new adapters never require editing it.
+- **CLI:** `scrape -s a -s b` runs several chosen sources; unknown names give a clear error.
+- **Pre-commit hook** (`.githooks/pre-commit`, enabled with `git config core.hooksPath .githooks`): auto-formats staged Python files with ruff and blocks commits with lint errors.
 
 ### 2026-10-16 (Group B)
 - **5 new adapters:** `connecticum.py`, `efellows.py`, `fraunhofer.py`, `germantechjobs.py`, `workingstudentjobs.py`.
@@ -76,6 +89,10 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 
 | Date | Problem | Cause | Fix |
 |---|---|---|---|
+| 10-16 | foorilla filters (Part-time / English / Germany) not in the URL | The site stores filters in the browser session | Use its quick-search parameter and filter by location ourselves |
+| 10-16 | `ValidationError: name … input_value=True` in a test | YAML reads the words `on`/`off`/`yes`/`no` as booleans | Never use those as source names (or quote them) |
+| 10-16 | `KeyError: 'connecticum'` in all new tests | The new `adapters/__init__.py` was saved over `src/werkbot/__init__.py` (two files with the same name); the adapters were never registered | Restored with `git checkout`; adapters now auto-register, so that file never changes again |
+| 10-16 | CI red again (missing final newline) | Formatting depended on remembering to run ruff | Pre-commit hook formats automatically; branch ruleset should block red merges |
 | 10-16 | CI red after merging PR #1: `ruff format --check` failed on 14 files | Files pasted into VS Code lost their final newline | `uv run ruff format .`; VS Code now inserts final newlines; `.gitattributes` forces LF. Run `ruff format`, `ruff check`, `pytest` before every commit. |
 | 10-16 | germantechjobs page is only 6 KB with no jobs | The site is a JavaScript app; the HTML is an empty shell | Use its JSON API (`/api/jobsLight`), which also has job type + language |
 | 10-16 | workingstudentjobs page mixes results with a "Trending this week" sidebar | Scraping all job links would pick up unrelated jobs | Read the result objects from the embedded page data instead of links |
@@ -123,7 +140,6 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 
 ## Next
 
-1. Live-test the 5 new adapters; tune the germantechjobs `job_types` filter from the logged values
-2. Group E: LinkedIn (python-jobspy)
-3. Group D: MPI page watchers
-4. Group C: foorilla, DFKI (find hidden endpoints)
+1. Live-test Groups B, D, E; tune the germantechjobs `job_types` filter from the logged values
+2. Phase 2: deduplication + saving to SQLite
+3. Shared "fetch description" step for sources whose lists have no description
