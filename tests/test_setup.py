@@ -13,15 +13,27 @@ ROOT = Path(__file__).resolve().parents[1]
 
 def test_sources_yaml_is_valid():
     sources = load_sources(ROOT / "data" / "sources.yaml", include_disabled=True)
-    assert len(sources) == 15  # 14 sites; LinkedIn has two searches
-    groups = {s.group for s in sources}
-    assert groups == set(SourceGroup)
+    assert len(sources) >= 14
+    assert {s.group for s in sources} == set(SourceGroup)
 
 
-def test_disabled_sources_are_skipped_by_default():
-    enabled = load_sources(ROOT / "data" / "sources.yaml")
-    assert all(s.enabled for s in enabled)
-    assert "foorilla" not in {s.name for s in enabled}
+def test_every_source_has_a_built_adapter():
+    from werkbot.adapters import REGISTRY
+
+    sources = load_sources(ROOT / "data" / "sources.yaml", include_disabled=True)
+    missing = {s.name: s.adapter for s in sources if s.adapter not in REGISTRY}
+    assert missing == {}
+
+
+def test_disabled_sources_are_skipped_by_default(tmp_path):
+    config = tmp_path / "sources.yaml"
+    config.write_text(
+        "- {name: active, group: A, adapter: x, url: 'https://a.example'}\n"
+        "- {name: inactive, group: A, adapter: x, url: 'https://b.example', enabled: false}\n",
+        encoding="utf-8",
+    )
+    assert [s.name for s in load_sources(config)] == ["active"]
+    assert len(load_sources(config, include_disabled=True)) == 2
 
 
 def test_init_db_creates_tables(tmp_path):

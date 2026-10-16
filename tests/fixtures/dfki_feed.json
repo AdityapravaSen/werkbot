@@ -1,0 +1,269 @@
+{
+    "jobs": [
+        {
+            "id": 620743,
+            "title": "Studentische Hilfskraft (m/w/d)",
+            "language": "DEFAULT",
+            "status": "open",
+            "refno": "11409",
+            "weblink": "https://jobs.dfki.de/de/vacancy/studentische-hilfskraft-m-w-d-620743.html",
+            "wcc_matching_score": "0",
+            "summary": "",
+            "timestamp": "2026-10-09 09:16:56",
+            "display_in_list": "Y",
+            "publication": {
+                "internet": {
+                    "live": "Y",
+                    "publish_date": "2026-10-06 00:00:00",
+                    "closing_date": "2026-10-23 00:00:00"
+                },
+                "intranet": {
+                    "live": "Y",
+                    "publish_date": "2026-10-06 00:00:00",
+                    "closing_date": "2026-10-23 00:00:00"
+                }
+            },
+            "recruiter": {
+                "id": 1,
+                "full_name": "Recruiter Name",
+                "job_title": "",
+                "branch": "",
+                "email": "recruiter@example.org",
+                "work_phone": "",
+                "mobile_phone": ""
+            },
+            "org": {
+                "id": null,
+                "name": "",
+                "url": "",
+                "contact_id": null,
+                "contact_first_name": "",
+                "contact_last_name": "",
+                "org_contact_email": "",
+                "org_contact_phone": "",
+                "org_location_name": "",
+                "org_location_adress1": "",
+                "org_location_adress2": "",
+                "org_location_postal_code": "",
+                "org_location_city": "",
+                "org_location_country": ""
+            },
+            "locations": [
+                {
+                    "id": null,
+                    "name": "",
+                    "address1": "",
+                    "address2": "",
+                    "postal_code": "",
+                    "city": "",
+                    "county": "",
+                    "country": "",
+                    "code": "",
+                    "telephone": "",
+                    "fax": "",
+                    "latitude": null,
+                    "longitude": null
+                }
+            ],
+            "form_id": 3725,
+            "mobile_form_id": 3725,
+            "template_id": 9980,
+            "web_site_id": 6635,
+            "classifications": {
+                "class_24025": {
+                    "id": 24025,
+                    "name": "Stellenausschreibung Titel lang - DE",
+                    "lov_id": null,
+                    "values": [
+                        {
+                            "class_val": "Studentische Hilfskraft (m/w/d) für semantisch-visuelles fact checking für deep fake detection",
+                            "class_val_id": null,
+                            "class_val_code": ""
+                        }
+                    ]
+                },
+                "class_24066": {
+                    "id": 24066,
+                    "name": "Stellenausschreibung Titel lang - EN",
+                    "lov_id": null,
+                    "values": [
+                        {
+                            "class_val": "Student Assistant (m/f/o) for semantic visual fact checking for deepfake detection",
+                            "class_val_id": null,
+                            "class_val_code": ""
+                        }
+                    ]
+                },
+                "class_23805": {
+                    "id": 23805,
+                    "name": "Tätigkeitsbereich",
+                    "lov_id": 10436,
+                    "values": [
+                        {
+                            "class_val": "Wissenschaftl. Hilfskraft",
+                            "class_val_id": 667250,
+                            "class_val_code": "667250"
+                        }
+                    ]
+                },
+                "class_23438": {
+                    "id": 23438,
+                    "name": "Bereich",
+                    "lov_id": 10346,
+                    "values": [
+                        {
+                            "class_val": "Speech and Language Technology",
+                            "class_val_id": 660690,
+                            "class_val_code": "660690"
+                        }
+                    ]
+                },
+                "class_23605": {
+                    "id": 23605,
+                    "name": "Standort",
+                    "values": [
+                        {
+                            "class_val": "Berlin",
+                            "class_val_id": 661024,
+                            "class_val_code": "661024"
+                        }
+                    ]
+                }
+            },
+            "documents": []
+        },
+        {
+            "id": 586879,
+            "title": "Researcher ResiTSN/ISO27K-Einführung",
+            "language": "DEFAULT",
+            "status": "open",
+            "refno": "11202",
+            "weblink": "https://jobs.dfki.de/de/vacancy/researcher-resitsn-iso27keinfuhrung-586879.html",
+            "wcc_matching_score": "0",
+            "summary": "",
+            "timestamp": "2025-07-09 08:30:10",
+            "display_in_list": "Y",
+            "publication": {
+                "internet": {
+                    "live": "Y",
+                    "publish_date": "2025-05-14 00:00:00",
+                    "closing_date": ""
+                },
+                "intranet": {
+                    "live": "Y",
+                    "publish_date": "2025-05-14 00:00:00",
+                    "closing_date": ""
+                }
+            },
+            "recruiter": {
+                "id": 1,
+                "full_name": "Recruiter Name",
+                "job_title": "",
+                "branch": "",
+                "email": "recruiter@example.org",
+                "work_phone": "",
+                "mobile_phone": ""
+            },
+            "org": {
+                "id": null,
+                "name": "",
+                "url": "",
+                "contact_id": null,
+                "contact_first_name": "",
+                "contact_last_name": "",
+                "org_contact_email": "",
+                "org_contact_phone": "",
+                "org_location_name": "",
+                "org_location_adress1": "",
+                "org_location_adress2": "",
+                "org_location_postal_code": "",
+                "org_location_city": "",
+                "org_location_country": ""
+            },
+            "locations": [
+                {
+                    "id": null,
+                    "name": "",
+                    "address1": "",
+                    "address2": "",
+                    "postal_code": "",
+                    "city": "",
+                    "county": "",
+                    "country": "",
+                    "code": "",
+                    "telephone": "",
+                    "fax": "",
+                    "latitude": null,
+                    "longitude": null
+                }
+            ],
+            "form_id": 3730,
+            "mobile_form_id": 3730,
+            "template_id": 9980,
+            "web_site_id": 6635,
+            "classifications": {
+                "class_24025": {
+                    "id": 24025,
+                    "name": "Stellenausschreibung Titel lang - DE",
+                    "lov_id": null,
+                    "values": [
+                        {
+                            "class_val": "Wissenschaftliche Mitarbeiter für Sicherheit in Echtzeitnetzen und ISO27000-Einführung  (m/f/d/x)",
+                            "class_val_id": null,
+                            "class_val_code": ""
+                        }
+                    ]
+                },
+                "class_24066": {
+                    "id": 24066,
+                    "name": "Stellenausschreibung Titel lang - EN",
+                    "lov_id": null,
+                    "values": [
+                        {
+                            "class_val": "Researcher for security in real-time networks and ISO-27000 introduction (m/f/d/x) ",
+                            "class_val_id": null,
+                            "class_val_code": ""
+                        }
+                    ]
+                },
+                "class_23805": {
+                    "id": 23805,
+                    "name": "Tätigkeitsbereich",
+                    "lov_id": 10436,
+                    "values": [
+                        {
+                            "class_val": "Wissenschaft",
+                            "class_val_id": 667256,
+                            "class_val_code": "667256"
+                        }
+                    ]
+                },
+                "class_23438": {
+                    "id": 23438,
+                    "name": "Bereich",
+                    "lov_id": 10346,
+                    "values": [
+                        {
+                            "class_val": "Cyber-Physical Systems",
+                            "class_val_id": 660672,
+                            "class_val_code": "660672"
+                        }
+                    ]
+                },
+                "class_23605": {
+                    "id": 23605,
+                    "name": "Standort",
+                    "values": [
+                        {
+                            "class_val": "Bremen",
+                            "class_val_id": 661023,
+                            "class_val_code": "661023"
+                        }
+                    ]
+                }
+            },
+            "documents": []
+        }
+    ],
+    "total": 2
+}

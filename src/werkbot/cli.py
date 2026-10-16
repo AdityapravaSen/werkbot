@@ -57,15 +57,20 @@ def sources(all: bool = typer.Option(False, "--all", help="Include disabled sour
 
 @app.command()
 def scrape(
-    source: str = typer.Option(None, "--source", "-s", help="Run only this source."),
+    source: list[str] = typer.Option(  # noqa: B008
+        None, "--source", "-s", help="Run only these sources (repeat -s for several)."
+    ),
     show: int = typer.Option(0, "--show", help="Print the first N jobs as a table."),
 ) -> None:
     """Scrape enabled sources and save the raw results to output/raw/<source>.json."""
     settings = get_settings()
-    selected = [s for s in load_sources(settings.sources_path) if source in (None, s.name)]
-    if not selected:
-        console.print(f"[red]No enabled source named {source!r}[/red]")
+    enabled = load_sources(settings.sources_path)
+    unknown = set(source or []) - {s.name for s in enabled}
+    if unknown:
+        console.print(f"[red]No enabled source named: {', '.join(sorted(unknown))}[/red]")
+        console.print("See all names with: werkbot sources")
         raise typer.Exit(1)
+    selected = [s for s in enabled if not source or s.name in source]
 
     raw_dir = settings.output_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)

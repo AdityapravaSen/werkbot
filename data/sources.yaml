@@ -122,39 +122,59 @@
     languages: ["English"]
   notes: One request returns all jobs; jobType and language filters run on our side.
 
-# ---------- Group C: JavaScript-loaded (inspect network requests first) ----------
+# ---------- Group C: JavaScript sites (data endpoints found with scripts/probe_network.py) ----------
 - name: foorilla
   group: C
   adapter: foorilla
-  url: https://foorilla.com/hiring/
-  enabled: false
+  url: https://foorilla.com/hiring/jobs/
   params:
-    job_type: Part-time
-    language: English
-    country: Germany
-  notes: Find the hidden request the filters send; Playwright as fallback.
+    # The site's own filters live in the browser session, so we use its quick search
+    # and keep only jobs whose location mentions one of these (whole-word match).
+    search_terms: ["working student", "werkstudent"]
+    location_keywords:
+      [Germany, Deutschland, Kaiserslautern, Saarbrücken, Saarbruecken, Mannheim, Heidelberg,
+       Karlsruhe, Frankfurt, Mainz, Darmstadt, Stuttgart, Munich, München, Berlin, Hamburg,
+       Cologne, Köln, Düsseldorf, Bonn, Trier, Ludwigshafen]
+    delay_s: 2
+    max_pages: 5
+  notes: Django + htmx HTML fragments. No company name in the list (comes with the details).
 
 - name: dfki
   group: C
   adapter: dfki
-  url: https://jobs.dfki.de/ausschreibungen.html#filter=p_web_site_id%3D6635%26p_published_to%3DWWW%26p_language%3DDEFAULT%26p_direct%3DY%26p_format%3DMOBILE%26p_include_exclude_from_list%3DN%26p_category_code_arr%3D23427-662551%26p_search%3D
-  enabled: false
-  notes: Table is filled by JavaScript; look for the JSON call behind it.
+  url: https://jobs.dfki.de/utf8/ic_job_feeds.feed_engine
+  params:
+    category_codes: ["23427-662551"]   # Teilzeit (your original filter)
+  notes: JSON feed behind the jobs page. All DFKI sites; location filter happens in Phase 3.
+
+- name: dfki_hiwi
+  group: C
+  adapter: dfki
+  url: https://jobs.dfki.de/utf8/ic_job_feeds.feed_engine
+  params:
+    category_codes: ["23805-667250"]   # Wissenschaftl. Hilfskraft (HiWi), any working time
+  notes: HiWi jobs are not always tagged Teilzeit, so they get their own search.
 
 # ---------- Group D: page watchers ----------
 - name: mpi_inf_d2
   group: D
   adapter: page_watch
   url: https://www.mpi-inf.mpg.de/departments/computer-vision-and-machine-learning/application/hiwi-/-student-assistants
+  params:
+    label: MPI-INF D2 (Computer Vision & ML) HiWi page
+    organization: Max Planck Institute for Informatics
   notes: General HiWi call. Alert on change. Cold-email target.
 
 - name: mpi_inf_d6
   group: D
   adapter: page_watch
   url: https://www.mpi-inf.mpg.de/departments/visual-computing-and-artificial-intelligence/offers
+  params:
+    label: MPI-INF D6 (Visual Computing & AI) offers page
+    organization: Max Planck Institute for Informatics
   notes: No HiWi openings listed. Alert on change. Cold-email target.
 
-# ---------- Group E: LinkedIn ----------
+# ---------- Group E: LinkedIn (needs: uv sync --group dev --extra linkedin) ----------
 - name: linkedin_local
   group: E
   adapter: linkedin
