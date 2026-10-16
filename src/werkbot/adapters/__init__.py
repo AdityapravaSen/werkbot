@@ -1,20 +1,20 @@
 """Source adapters. Each one turns a site into a list of `Job` objects.
 
-To add an adapter:
-    1. Create a module here, e.g. `arbeitnow.py`.
-    2. Subclass `Adapter`, set `name`, implement `fetch()`.
-    3. Decorate the class with `@register`.
-    4. Import the module at the bottom of this file so it registers itself.
+To add an adapter, create a module in this folder (e.g. `mysite.py`) with a class that
+subclasses `Adapter`, sets `name`, implements `fetch()` and is decorated with `@register`.
+Every module in this folder is imported automatically below, so nothing else needs editing.
 """
+
+import importlib
+import pkgutil
 
 from werkbot.adapters.base import REGISTRY, Adapter, register
 
-# Importing a module registers its adapter.
-from werkbot.adapters import (  # noqa: E402, F401  isort: skip
-    arbeitnow,
-    arbeitsagentur,
-    softgarden,
-    wearedevelopers,
-)
+# Helper modules that contain no adapters
+_NOT_ADAPTERS = {"base", "html"}
+
+for _module in pkgutil.iter_modules(__path__):
+    if _module.name not in _NOT_ADAPTERS and not _module.name.startswith("_"):
+        importlib.import_module(f"{__name__}.{_module.name}")
 
 __all__ = ["REGISTRY", "Adapter", "register"]

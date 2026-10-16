@@ -10,14 +10,14 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 | Phase | What | Status |
 |---|---|---|
 | 0 | Project setup | ✅ Done |
-| 1 | Scrapers | 🟡 In progress (4 of 14 sources, Group A done) |
+| 1 | Scrapers | 🟡 In progress (9 of 14 sources: Groups A + B done) |
 | 2 | Deduplication | ⬜ Not started |
 | 3 | Filtering (language, location, role) | ⬜ Not started |
 | 4 | Fit scoring | ⬜ Not started |
 | 5 | Resume + cover letter tailoring (LaTeX) | ⬜ Not started |
 | 6 | Delivery + daily schedule | ⬜ Not started |
 
-**Tests:** 24 passing · **Branch:** `phase-1-scrapers`
+**Tests:** 38 passing · **Branch:** `phase-1-scrapers`
 
 ---
 
@@ -29,11 +29,11 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 | 2 | Arbeitsagentur | A (API) | ✅ Working | ~189 results for the default search |
 | 3 | Ramstein AF (softgarden) | A (feed) | ✅ Working | No category in feed; filtered by city + title keywords |
 | 4 | WeAreDevelopers | A (Markdown list) | ✅ Working | ~204 results, 24 per page; no description in the list |
-| 5 | connecticum | B (HTML) | ⬜ | |
-| 6 | e-fellows | B (HTML) | ⬜ | |
-| 7 | Fraunhofer | B (HTML) | ⬜ | |
-| 8 | germantechjobs | B (HTML) | ⬜ | |
-| 9 | workingstudentjobs | B (HTML) | ⬜ | |
+| 5 | connecticum | B (HTML cards) | ✅ Built | Follows `rel="next"`; mostly German ads |
+| 6 | e-fellows | B (`__NEXT_DATA__` JSON) | ✅ Built | Exact publish dates |
+| 7 | Fraunhofer | B (HTML table) | ✅ Built | No date in the list (detail page only) |
+| 8 | germantechjobs | **A** (JSON API) | ✅ Built | Site is a JS app; `/api/jobsLight` has `jobType` + `language` |
+| 9 | workingstudentjobs | B (Next.js page payload) | ✅ Built | Gives `is_german_required` per job |
 | 10 | foorilla | C (JavaScript) | ⬜ Disabled | Hidden endpoint not found yet |
 | 11 | DFKI | C (JavaScript) | ⬜ Disabled | Hidden endpoint not found yet |
 | 12–13 | MPI-INF (2 pages) | D (page watch) | ⬜ | |
@@ -42,6 +42,14 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 ---
 
 ## Changelog
+
+### 2026-10-16 (Group B)
+- **5 new adapters:** `connecticum.py`, `efellows.py`, `fraunhofer.py`, `germantechjobs.py`, `workingstudentjobs.py`.
+- **`adapters/html.py`:** shared helpers to read HTML and the JSON that Next.js sites embed in pages.
+- **`german_required`** field on `Job`, filled when a source states it (germantechjobs, workingstudentjobs).
+- **`Adapter.warn()`** in the base class: one way for every adapter to report "partial / site changed".
+- **Real-page test fixtures** in `tests/fixtures/`: trimmed copies of the actual sites' HTML.
+- **Editor + git settings** (`.vscode/settings.json`, `.gitattributes`): always a final newline, LF line endings.
 
 ### 2026-10-16
 - **softgarden feed adapter** (`adapters/softgarden.py`): reads any softgarden career site's `jobs.feed.json`. Used for Ramstein AF, filtered by city and title keywords.
@@ -68,6 +76,9 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 
 | Date | Problem | Cause | Fix |
 |---|---|---|---|
+| 10-16 | CI red after merging PR #1: `ruff format --check` failed on 14 files | Files pasted into VS Code lost their final newline | `uv run ruff format .`; VS Code now inserts final newlines; `.gitattributes` forces LF. Run `ruff format`, `ruff check`, `pytest` before every commit. |
+| 10-16 | germantechjobs page is only 6 KB with no jobs | The site is a JavaScript app; the HTML is an empty shell | Use its JSON API (`/api/jobsLight`), which also has job type + language |
+| 10-16 | workingstudentjobs page mixes results with a "Trending this week" sidebar | Scraping all job links would pick up unrelated jobs | Read the result objects from the embedded page data instead of links |
 | 10-16 | `Activate.ps1 cannot be loaded … running scripts is disabled` when opening a terminal | Windows blocks PowerShell scripts by default; VS Code tries to auto-activate `.venv` | `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` (or ignore it: `uv run` doesn't need activation) |
 | 10-16 | Ramstein feed has no IT/Engineering category | The JSON feed only has title, location, date, description | Filter on title keywords (configurable in `sources.yaml`) |
 | 10-15 | Arbeitsagentur returned **0 jobs** even though the API reported 189 | The API renamed nearly every field (`stellenangebote` → `ergebnisliste`, `refnr` → `referenznummer`, `titel` → `stellenangebotsTitel`, `arbeitgeber` → `firma`). The public spec on GitHub is outdated. | Read the new names, keep the old ones as a fallback, warn when "jobs exist but none readable". Tests now use the real format. |
@@ -95,6 +106,8 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 | Adapters return partial results on errors | A blocked page shouldn't throw away everything already collected |
 | Dropped datacareer, absolventa, academics.de | Not worth the effort |
 | Arbeitsagentur: no `branche` (IT) filter | Not supported by the API; our own filters handle it in Phase 3 |
+| Prefer data embedded in pages (`__NEXT_DATA__`, Next.js payload, JSON-LD) over CSS classes | Class names like `jobTeaser_title__XIgud` change on every deploy; the data structure rarely does |
+| Test fixtures are trimmed copies of real pages | Tests check against the actual markup, not what we assume it looks like |
 | WeAreDevelopers: read Markdown, not HTML cards | Plain text with labelled fields; far less likely to break on a redesign |
 | Fit score, not "chance of getting hired" | No tool can predict hiring honestly |
 
@@ -105,11 +118,12 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 ## Known gaps
 
 - **WeAreDevelopers has no description** in the list. Fit scoring needs one, so job pages will be fetched later (after dedup + filtering, to avoid ~200 extra requests).
+- **Descriptions are missing** for connecticum, e-fellows, Fraunhofer, germantechjobs and workingstudentjobs (list pages only). The probe detail pages show e-fellows + workingstudentjobs have JSON-LD `JobPosting` and Fraunhofer has microdata, so one shared "fetch description" step can cover most sites.
 - **The same job can appear twice within one source** (e.g. Ramstein posts one listing per open position). Phase 2 merges them.
 
 ## Next
 
-1. Group B HTML adapters: connecticum, e-fellows, Fraunhofer, germantechjobs, workingstudentjobs
+1. Live-test the 5 new adapters; tune the germantechjobs `job_types` filter from the logged values
 2. Group E: LinkedIn (python-jobspy)
 3. Group D: MPI page watchers
 4. Group C: foorilla, DFKI (find hidden endpoints)
