@@ -10,8 +10,8 @@
   params:
     keywords: ["working student", "werkstudent", "studentische", "student assistant"]
     delay_s: 3        # rate-limits at ~1 request/second
-    max_pages: 40
-  notes: No search parameter. Fetch all pages, filter keywords and age locally.
+    max_pages: 100    # NOT sorted by date: read until the pages run out (~5 min)
+  notes: No search parameter and not sorted by date. Fetch all pages, filter locally.
 
 - name: arbeitsagentur
   group: A
@@ -24,7 +24,7 @@
     veroeffentlichtseit: 7
     size: 100
     fetch_details: true   # one extra request per job, for the description
-    max_details: 200
+    max_details: 300
     delay_s: 1
   notes: >-
     Public Jobsuche API used by arbeitsagentur.de itself. The website's branche=11
@@ -118,7 +118,8 @@
   params:
     # Matched case-insensitively as substrings of the job's "jobType" / "language".
     # The scrape log prints every value that exists, so you can adjust these.
-    job_types: ["part-time", "working student", "werkstudent", "intern", "student"]
+    # Values seen live (2026-10-16): Full-Time 1050, Internship 40, Contract 2, Part-Time 1
+    job_types: ["part-time", "internship", "working student", "werkstudent"]
     languages: ["English"]
   notes: One request returns all jobs; jobType and language filters run on our side.
 

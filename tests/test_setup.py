@@ -60,3 +60,19 @@ def test_db_rejects_duplicate_fingerprint(tmp_path):
                 "INSERT INTO jobs (fingerprint, title, company, main_url) VALUES (?, ?, ?, ?)", row
             )
         assert db.find_duplicates(conn) == {}
+
+
+def test_cli_output_survives_windows_cp1252_pipe():
+    """Regression: piping output on Windows (cp1252) crashed on '→' and non-Latin titles."""
+    import os
+    import subprocess
+    import sys
+
+    code = "import werkbot.cli as c; c.console.print('338 jobs → raw | AI Native 架构师 | Köln')"
+    env = {**os.environ, "PYTHONIOENCODING": "cp1252"}
+    result = subprocess.run(
+        [sys.executable, "-c", code], capture_output=True, env=env, timeout=60, check=False
+    )
+
+    assert result.returncode == 0, result.stderr.decode(errors="replace")
+    assert "架构师" in result.stdout.decode("utf-8")

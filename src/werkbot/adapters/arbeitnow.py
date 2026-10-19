@@ -2,8 +2,8 @@
 
 API: https://www.arbeitnow.com/api/job-board-api?page=N
 Each page returns {"data": [...], "links": {"next": ...}, ...}.
-The API has no search parameter, so we page through everything (newest first)
-and keep jobs that match the keywords and are within `max_age_days`.
+The API has no search parameter and is NOT sorted by date (checked live, Oct 2026), so we
+page through everything and keep jobs that match the keywords and are within `max_age_days`.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -52,11 +52,17 @@ class ArbeitnowAdapter(Adapter):
                     if _matches(item, keywords):
                         jobs.append(_to_job(item, posted))
 
+                dates = [d for d in (_parse_timestamp(i.get("created_at")) for i in items) if d]
+                oldest = min(dates).date() if dates else "?"
                 logger.info(
-                    "arbeitnow page {}: {} items, {} matches so far", page, len(items), len(jobs)
+                    "arbeitnow page {}: {} items (oldest {}), {} matches so far",
+                    page,
+                    len(items),
+                    oldest,
+                    len(jobs),
                 )
 
-                # Results are newest first: once a whole page is too old, stop.
+                # If a whole page is older than the cutoff, the rest is very likely too.
                 if all_too_old:
                     break
                 links = payload.get("links")

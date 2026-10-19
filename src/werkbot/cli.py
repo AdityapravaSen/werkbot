@@ -16,6 +16,17 @@ from werkbot.models import Job
 from werkbot.sources import load_sources
 
 app = typer.Typer(help="Find English-speaking Werkstudent jobs and tailor your applications.")
+
+
+def _utf8_streams() -> None:
+    """Windows consoles and pipes default to cp1252, which can't print many job titles
+    (e.g. Chinese, or arrows). Switch to UTF-8 and never crash on an odd character."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
+_utf8_streams()
 console = Console()
 
 
@@ -23,10 +34,19 @@ console = Console()
 def main(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show every HTTP request."),
 ) -> None:
-    """Runs before every command: set how much logging is shown."""
+    """Runs before every command: set up logging to the screen and to a daily log file."""
     logger.remove()
     logger.add(
         sys.stderr, level="DEBUG" if verbose else "INFO", format="{time:HH:mm:ss} | {message}"
+    )
+    log_dir = get_settings().output_dir / "logs"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    logger.add(
+        log_dir / "werkbot_{time:YYYY-MM-DD}.log",
+        level="DEBUG",  # the file always has full detail, including every request
+        format="{time:YYYY-MM-DD HH:mm:ss} | {level: <7} | {message}",
+        encoding="utf-8",
+        retention="14 days",
     )
 
 
@@ -77,29 +97,43 @@ def scrape(
     all_jobs: list[Job] = []
     failed = 0
 
+    summary: list[tuple[str, str, str]] = []  # (source, status, detail)
+
     for s in selected:
         adapter_cls = REGISTRY.get(s.adapter)
         if adapter_cls is None:
             console.print(f"[yellow]skip[/yellow] {s.name}: adapter '{s.adapter}' not built yet")
+            summary.append((s.name, "skip", "adapter not built"))
             continue
         adapter = adapter_cls(s, settings)
         try:
             jobs = adapter.fetch()
+            out = raw_dir / f"{s.name}.json"
+            out.write_text(
+                json.dumps([j.model_dump(mode="json") for j in jobs], indent=2, ensure_ascii=False),
+                encoding="utf-8",
+            )
         except Exception as exc:  # one broken site must not stop the others
             failed += 1
-            console.print(f"[red]fail[/red] {s.name}: {type(exc).__name__}: {exc}")
+            logger.exception("{} failed", s.name)  # full traceback goes to the log file
+            console.print(f"[red]fail[/red]    {s.name}: {type(exc).__name__}: {exc}")
+            summary.append((s.name, "fail", f"{type(exc).__name__}: {exc}"[:80]))
             continue
-        out = raw_dir / f"{s.name}.json"
-        out.write_text(
-            json.dumps([j.model_dump(mode="json") for j in jobs], indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
         all_jobs.extend(jobs)
-        status = "[yellow]partial[/yellow]" if adapter.warnings else "[green]ok[/green]     "
-        console.print(f"{status} {s.name}: {len(jobs)} jobs → {out}")
+        status = "partial" if adapter.warnings else "ok"
+        color = "yellow" if adapter.warnings else "green"
+        console.print(f"[{color}]{status:<7}[/{color}] {s.name}: {len(jobs)} jobs -> {out}")
         for warning in adapter.warnings:
-            console.print(f"          [yellow]↳ {warning}[/yellow]")
+            console.print(f"          [yellow]- {warning}[/yellow]")
+        summary.append((s.name, status, f"{len(jobs)} jobs"))
 
+    if summary:
+        table = Table("Source", "Status", "Result")
+        colors = {"ok": "green", "partial": "yellow", "fail": "red", "skip": "dim"}
+        for name, status, detail in summary:
+            table.add_row(name, f"[{colors[status]}]{status}[/{colors[status]}]", escape(detail))
+        console.print()
+        console.print(table)
     console.print(f"\n[bold]{len(all_jobs)} jobs total[/bold], {failed} source(s) failed")
 
     if show and all_jobs:
@@ -113,6 +147,7 @@ def scrape(
         console.print(
             "[dim]All fields incl. links and descriptions: output/raw/<source>.json[/dim]"
         )
+    console.print(f"[dim]Full log: {settings.output_dir / 'logs'}[/dim]")
 
 
 @app.command("check-db")

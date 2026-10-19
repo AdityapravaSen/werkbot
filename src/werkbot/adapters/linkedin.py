@@ -14,6 +14,8 @@ Each source in sources.yaml is one search, e.g.
 import math
 from datetime import UTC, date, datetime
 
+from loguru import logger
+
 from werkbot.adapters.base import Adapter, register
 from werkbot.models import Job
 
@@ -51,6 +53,7 @@ class LinkedInAdapter(Adapter):
             job = _to_job(_clean(row), source=self.source.name)
             if job:
                 jobs.setdefault(job.source_job_id, job)
+        logger.info("{}: {} rows from LinkedIn, {} jobs", self.source.name, len(rows), len(jobs))
         return list(jobs.values())
 
     def _scrape(self, **query) -> list[dict]:

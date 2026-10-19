@@ -18,6 +18,7 @@ Filter codes (p_category_code_arr, can be repeated):
 from datetime import UTC, datetime
 
 import httpx
+from loguru import logger
 
 from werkbot.adapters.base import Adapter, register
 from werkbot.models import Job
@@ -63,6 +64,7 @@ class DfkiAdapter(Adapter):
             job = _to_job(item)
             if job:
                 jobs.setdefault(job.source_job_id, job)
+        logger.info("{}: {} jobs in feed (total {})", self.source.name, len(jobs), total)
         return list(jobs.values())
 
 
