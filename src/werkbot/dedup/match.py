@@ -78,10 +78,15 @@ class Keys:
 
 
 def same_place(a: Keys, b: Keys) -> bool:
-    """Same city, a shared city, one of them remote, or one place unknown."""
+    """One job's main city is among the other's cities, one is remote, or one is unknown.
+
+    Only the main (first) city counts on each side, so a shared word like
+    "Württemberg" in "Leonberg, Württemberg" / "Fellbach, Württemberg" is not a match,
+    while "Hamburg" still matches a list like "Berlin, Hamburg, München".
+    """
     if a.remote or b.remote or not a.cities or not b.cities:
         return True
-    return bool(a.cities & b.cities)
+    return a.city in b.cities or b.city in a.cities
 
 
 def _squash(text: str) -> str:

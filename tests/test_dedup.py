@@ -73,6 +73,13 @@ def groups_of(jobs: list[Job]) -> list[list[int]]:
         ("Praktikum C# / C++ Entwicklung (m|w|d)", "intern c# c++ entwicklung"),
         ("Werkstudent / Working Student Data (gn*)", "student data"),
         ("Wissenschaftliche*r Mitarbeiter*in", "wissenschaftliche mitarbeiter"),
+        # Seen in the real run (2026-10-19)
+        ("Working Student in Software Development – Python (f/m/div.)", "student software development python"),  # noqa: E501
+        ("Werkstudent im Bereich KI & Innovation [M /W /D]", "student ki innovation"),
+        ("Working Student - Digital Solutions & AI iv)", "student digital solutions ai"),
+        ("Auszubildende/r Elektroniker (m/w/d)", "auszubildende elektroniker"),
+        ("Werkstudierende im Bereich Tools (m/w/d)", "student tools"),
+        ("Working Student Data Science (x|f|m)", "student data science"),
         # Words that only look like gender endings stay
         ("Working Student: Infrastructure", "student infrastructure"),
         ("Werkstudent Business/Insights", "student business insights"),
@@ -96,6 +103,18 @@ def test_normalize_title(raw, expected):
         ("Bosch Rexroth AG", "bosch rexroth"),  # a separate company
         ("SAP SE", "sap"),
         ("Müller & Co. KG", "mueller"),
+        ("E.ON", "e on"),  # not mistaken for "e.V."
+        ("Wandwerk e.K.", "wandwerk"),
+        ("KPMG AG Wirtschaftsprüfungsgesellschaft", "kpmg"),
+        ("KPMG Deutschland", "kpmg"),
+        ("Infineon Technologies AG", "infineon"),
+        ("Haufe-Lexware GmbH & Co.KG", "haufe"),
+        ("ImmoScout24", "scout24"),
+        ("Scout24 SE", "scout24"),
+        ("FERCHAU GmbH Niederlassung Darmstadt", "ferchau"),
+        ("Telekom Deutschland GmbH", "deutsche telekom"),
+        ("Allgemeine Informationen", ""),  # a WeAreDevelopers heading, not a company
+        ("Jobster", ""),  # posts other employers' ads on LinkedIn
         ("Unknown", ""),
         ("N/A", ""),
     ],
@@ -110,10 +129,20 @@ def test_normalize_company(raw, expected):
         ("70565 Stuttgart, Deutschland", "stuttgart", ["stuttgart"], False),
         ("Frankfurt am Main", "frankfurt", ["frankfurt"], False),
         ("Frankfurt a.M.", "frankfurt", ["frankfurt"], False),
-        ("Munich, Bavaria, Germany", "muenchen", ["muenchen"], False),
-        ("München", "muenchen", ["muenchen"], False),
+        ("Munich, Bavaria, Germany", "munchen", ["munchen"], False),
+        ("München", "munchen", ["munchen"], False),
+        ("Boblingen, Germany", "boblingen", ["boblingen"], False),  # umlaut dropped
+        ("Böblingen", "boblingen", ["boblingen"], False),
+        ("Coblenz, Rhineland-Palatinate, Germany", "koblenz", ["koblenz"], False),  # LinkedIn
+        ("Karlsruhe, BW, DE", "karlsruhe", ["karlsruhe"], False),  # state code
+        ("Leonberg, Württemberg", "leonberg", ["leonberg"], False),  # region
+        ("Otto-Ostrowski-Straße 7, 10249 Berlin", "berlin", ["berlin"], False),  # street
+        ("Köln, Picassoplatz 1, Germany", "koln", ["koln"], False),
+        ("Munich HQ", "munchen", ["munchen"], False),
+        ("Wangen, Kreis Göppingen", "wangen", ["wangen"], False),
+        ("Frankfurt am Main, Germany (Remote available)", "frankfurt", ["frankfurt"], True),
         ("Kaiserslautern, Rhineland-Palatinate, Germany", "kaiserslautern", ["kaiserslautern"], False),  # noqa: E501
-        ("Saarbrücken; Kaiserslautern", "saarbruecken", ["saarbruecken", "kaiserslautern"], False),
+        ("Saarbrücken; Kaiserslautern", "saarbrucken", ["saarbrucken", "kaiserslautern"], False),
         ("Garching bei München", "garching", ["garching"], False),
         ("Kaiserslautern (Remote möglich)", "kaiserslautern", ["kaiserslautern"], True),
         ("Remote", "remote", [], True),
@@ -274,6 +303,27 @@ def test_two_searches_on_one_site_count_as_one_board():
     keys = [Keys.of(j, ALIASES, boards) for j in jobs]
     assert [g.indexes for g in group_jobs(jobs, keys)] == [[0], [1]]
     assert groups_of(jobs) == [[0, 1]]  # without the mapping they'd count as two boards
+
+
+def test_a_shared_region_word_is_not_the_same_place():
+    """Arbeitsagentur writes "Leonberg, Württemberg" and "Fellbach, Württemberg"."""
+    jobs = [
+        job("Werkstudent Vertrieb Innendienst", location="Leonberg, Württemberg"),
+        job(
+            "Werkstudent Vertrieb Innendienst Export", location="Fellbach, Württemberg", source="b"
+        ),
+    ]
+    assert groups_of(jobs) == [[0], [1]]
+
+
+def test_one_city_in_a_list_of_cities_is_the_same_place():
+    jobs = [
+        job(
+            "Praktikant / Werkstudent Cyber Security Strategy", location="Berlin, Hamburg, München"
+        ),
+        job("Werkstudent Cyber Security Strategy", location="Hamburg", source="b"),
+    ]
+    assert groups_of(jobs) == [[0, 1]]
 
 
 def test_remote_matches_any_city():

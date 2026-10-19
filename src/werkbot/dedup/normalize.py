@@ -71,16 +71,18 @@ def url_hash(url: str) -> str:
 # ---------- title ----------
 
 _GENDER_TAGS = [
-    # (m/w/d) (w/ m/ d) (m/f/o) (m|w|d) (m,w,d) (m/w/div) (d/f/m) (m/w/x)
-    r"\(\s*(?:[mwfdxoi]|div|divers)\s*(?:[/|,]\s*(?:[mwfdxoi]|div|divers)\s*)+\)",
+    # (m/w/d) (w/ m/ d) (m/f/o) (m|w|d) (m,w,d) (m/w/div) (f/m/div.) [M /W /D] (d/f/m) (x|f|m)
+    r"[(\[]\s*(?:[mwfdxoi]|div|divers)\.?\s*(?:[/|,]\s*(?:[mwfdxoi]|div|divers)\.?\s*)+[)\]]",
+    # WeAreDevelopers cuts "(f/m/div)" to "iv)" in some titles
+    r"(?<![a-z(])d?iv\.?\)",
     # m/w/d without brackets
     r"(?<![a-z])(?:[mwfdx]\s*/\s*){2}[mwfdx](?![a-z])",
     r"\(\s*(?:all genders?|alle geschlechter|any gender|genderneutral|gn\*?)\s*\)",
     r"\ball genders?\b",
     # Werkstudent:in, Werkstudent*in, Werkstudent_in, Mitarbeiter/-in, Mitarbeiter/in, Student(in)
     r"(?<=[a-z])(?:[:*_]|/-?|\()in(?:nen)?\)?(?![a-z])",
-    # Wissenschaftliche*r, Wissenschaftliche:r
-    r"(?<=[a-z])[:*_]r(?![a-z])",
+    # Wissenschaftliche*r, Wissenschaftliche:r, Auszubildende/r
+    r"(?<=[a-z])[:*_/]r(?![a-z])",
 ]
 _GENDER_RE = re.compile("|".join(f"(?:{p})" for p in _GENDER_TAGS))
 
@@ -93,6 +95,7 @@ _ROLE_SYNONYMS = {
         "studentische mitarbeiter", "stud hilfskraft", "wissenschaftliche hilfskraefte",
         "wissenschaftliche hilfskraft", "wiss hilfskraft", "student assistants",
         "student assistant", "student worker", "student job", "studentenjob", "hiwi",
+        "werkstudierende", "werkstudium", "werkstudententaetigkeit", "werksstudent",
     ],
     "intern": [
         "pflichtpraktikum", "praktikantin", "praktikant", "praktikum", "internship", "intern",
@@ -132,14 +135,22 @@ def normalize_title(title: str | None) -> str:
 
 # ---------- company ----------
 
-# Placeholders adapters use when a board shows no company.
-UNKNOWN_COMPANIES = {"", "unknown", "n a", "na", "none", "anonym", "anonymous", "confidential"}
+# Placeholders adapters use when a board shows no company, plus job-ad resellers that
+# post other employers' ads on LinkedIn under their own name.
+UNKNOWN_COMPANIES = {
+    "", "unknown", "n a", "na", "none", "anonym", "anonymous", "confidential",
+    "allgemeine informationen", "general information",  # a WeAreDevelopers heading
+    "jobster", "heyjobs", "instaffo",
+}  # fmt: skip
 
-# Legal forms and similar words that differ between boards for the same employer.
+# Legal forms and other words that differ between boards for the same employer
+# ("KPMG AG Wirtschaftsprüfungsgesellschaft" = "KPMG Deutschland", "Infineon Technologies").
 _LEGAL_WORDS = {
-    "gmbh", "mbh", "ag", "se", "kg", "kgaa", "ohg", "gbr", "ug", "haftungsbeschraenkt",
-    "ev", "inc", "ltd", "llc", "plc", "corp", "corporation", "limited", "co",
-    "sa", "bv", "nv", "sarl", "spa", "group", "gruppe", "e", "v",
+    "gmbh", "ggmbh", "mbh", "ag", "se", "kg", "kgaa", "ohg", "gbr", "ug", "eg",
+    "haftungsbeschraenkt", "partg", "mbb", "ev", "ek", "inc", "ltd", "llc", "plc", "corp",
+    "corporation", "limited", "co", "sa", "bv", "nv", "sarl", "spa", "group", "gruppe",
+    "holding", "deutschland", "germany", "technologies", "technology",
+    "wirtschaftspruefungsgesellschaft", "steuerberatungsgesellschaft",
 }  # fmt: skip
 
 
@@ -158,7 +169,10 @@ def load_aliases(path: Path) -> tuple[tuple[re.Pattern, str], ...]:
 
 def normalize_company(name: str | None, aliases=()) -> str:
     """'Deutsche Bahn AG' -> 'deutsche bahn'. Returns '' when the company is unknown."""
-    text = re.sub(r"\be\.\s?v\b\.?", " ", fold(name))  # e.V.
+    text = re.sub(r"\be\.\s?[vk]\b\.?", " ", fold(name))  # e.V., e.K. (not E.ON)
+    text = re.sub(
+        r"\b(?:zweig)?niederlassung\b.*$", " ", text
+    )  # "FERCHAU ... Niederlassung Darmstadt"
     plain = _words(text)
     if plain in UNKNOWN_COMPANIES:
         return ""
@@ -181,22 +195,45 @@ _REMOTE_WORDS = re.compile(
     r"\b(remote|home ?office|mobile? (?:arbeiten|office)|deutschlandweit|bundesweit"
     r"|anywhere|work from home|wfh)\b"
 )
-# States, countries and regions: not cities, so they never count as a place match.
+
+
+def _city_key(text: str) -> str:
+    """Boards write umlauts in city names three ways (Böblingen, Boeblingen, Boblingen).
+    After fold() they are 'oe' or 'o'; this makes all of them 'o'."""
+    return text.replace("ae", "a").replace("oe", "o").replace("ue", "u")
+
+
+# States, countries, regions and state codes: never a city ("Karlsruhe, BW, DE").
 _REGIONS = {
-    "germany", "deutschland", "de", "ger", "eu", "europe", "emea", "dach",
-    "rheinland pfalz", "rhineland palatinate", "rlp", "saarland", "hessen", "hesse",
-    "baden wuerttemberg", "bayern", "bavaria", "nordrhein westfalen",
-    "north rhine westphalia", "nrw", "niedersachsen", "lower saxony", "sachsen", "saxony",
-    "sachsen anhalt", "saxony anhalt", "thueringen", "thuringia", "brandenburg",
-    "mecklenburg vorpommern", "mecklenburg western pomerania", "schleswig holstein",
-    "austria", "oesterreich", "switzerland", "schweiz",
+    _city_key(r)
+    for r in {
+        "germany", "deutschland", "de", "deu", "ger", "eu", "europe", "emea", "dach",
+        "rheinland pfalz", "rhineland palatinate", "rlp", "saarland", "hessen", "hesse",
+        "baden wuerttemberg", "bayern", "bavaria", "nordrhein westfalen",
+        "north rhine westphalia", "nrw", "niedersachsen", "lower saxony", "sachsen",
+        "saxony", "sachsen anhalt", "saxony anhalt", "thueringen", "thuringia",
+        "brandenburg", "mecklenburg vorpommern", "mecklenburg western pomerania",
+        "schleswig holstein", "bw", "by", "be", "bb", "hb", "hh", "he", "mv", "ni", "nw",
+        "rp", "sl", "sn", "st", "sh", "th",
+        "austria", "oesterreich", "switzerland", "schweiz", "netherlands", "nederland",
+        "belgium", "france", "poland", "spain", "italy", "uk", "united kingdom", "usa",
+        "noord holland", "zuid holland", "noord brabant", "overijssel", "gelderland",
+        # regions written after a town name: "Karlsruhe, Baden", "Ulm, Donau"
+        "baden", "wuerttemberg", "wuertt", "rheinland", "pfalz", "rhein", "neckar", "donau",
+        "main", "taunus", "eifel", "westerwald", "wetterau", "saar", "bergstrasse",
+        "schwarzwald", "odenwald", "allgaeu", "sauerland", "ruhr",
+    }
 }  # fmt: skip
-# English or alternative spellings -> one name.
+# Words around a city name: "Munich HQ", "Köln Zentrale", "Location Munich"
+_CITY_NOISE = {
+    "hq", "headquarter", "headquarters", "zentrale", "location", "standort", "store",
+    "campus", "office", "buro", "germany", "deutschland",
+}  # fmt: skip
+# English or older names -> one name (keys and values after _city_key).
 _CITY_ALIASES = {
-    "munich": "muenchen", "munchen": "muenchen", "cologne": "koeln", "koln": "koeln",
-    "nuremberg": "nuernberg", "nurnberg": "nuernberg", "dusseldorf": "duesseldorf",
-    "saarbrucken": "saarbruecken", "hanover": "hannover", "brunswick": "braunschweig",
-    "frankfurt main": "frankfurt", "ludwigshafen rhein": "ludwigshafen",
+    "munich": "munchen", "cologne": "koln", "nuremberg": "nurnberg",
+    "hanover": "hannover", "brunswick": "braunschweig", "coblenz": "koblenz",
+    "treves": "trier", "frankfurt main": "frankfurt", "ludwigshafen rhein": "ludwigshafen",
 }  # fmt: skip
 _SPLIT = re.compile(r"[,;|/]|\s+-\s+|\s+(?:oder|or|und|and|&)\s+")
 # "Frankfurt am Main" -> "frankfurt", "Garching bei München" -> "garching"
@@ -204,12 +241,19 @@ _QUALIFIER = re.compile(r"\s+(?:am|an der|a|bei|in der|im|vor der|ob der)\s+.*$"
 
 
 def parse_location(location: str | None) -> tuple[list[str], bool]:
-    """'70565 Stuttgart, Deutschland' -> (['stuttgart'], False). Cities in order."""
+    """'70565 Stuttgart, Deutschland' -> (['stuttgart'], False). Cities in order.
+
+    City names are a comparison key, not for display: umlauts become plain vowels
+    ('München' -> 'munchen'), so every spelling a board uses gives the same key.
+    """
     text = fold(location)
     remote = bool(_REMOTE_WORDS.search(text))
     cities: list[str] = []
     for part in _SPLIT.split(re.sub(r"\([^)]*\)", " ", text)):
         part = _words(re.sub(r"\b\d{4,5}\b", " ", part))  # postal codes
+        if re.search(r"\d", part) or part.startswith(("kreis ", "landkreis ")):
+            continue  # a street address ("Picassoplatz 1") or a district
+        part = _city_key(" ".join(w for w in part.split() if w not in _CITY_NOISE))
         part = _CITY_ALIASES.get(part, part)
         part = _QUALIFIER.sub("", part)
         part = _CITY_ALIASES.get(part, part)

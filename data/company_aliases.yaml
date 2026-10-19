@@ -42,4 +42,10 @@ dlr:
 # "Robert Bosch GmbH" and "Bosch", but not "Bosch Rexroth" (a separate company).
 bosch: ["^(robert )?bosch$"]
 
-deutsche telekom: ["^deutsche telekom\\b", "^telekom deutschland$"]
+# "Telekom Deutschland GmbH" becomes "telekom" ("Deutschland" is removed like a legal form)
+deutsche telekom: ["^deutsche telekom\\b", "^telekom$"]
+
+# Found in a real run (2026-10-19): the same job listed under both names
+haufe: ["^haufe\\b"]                    # Haufe Group SE / Haufe-Lexware GmbH & Co. KG
+scout24: ["^(immo)?scout24\\b"]         # ImmoScout24 / Scout24 SE
+infineon: ["^infineon\\b"]              # Infineon / Infineon Technologies AG

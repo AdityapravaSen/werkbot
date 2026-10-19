@@ -17,7 +17,7 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 | 5 | Resume + cover letter tailoring (LaTeX) | ⬜ Not started |
 | 6 | Delivery + daily schedule | ⬜ Not started |
 
-**Tests:** 132 passing · **Phase 2 complete** (2026-10-19) · **Branch:** `phase-2-dedup`
+**Tests:** 162 passing · **Phase 2 complete** (2026-10-19) · **Branch:** `phase-2-dedup`
 
 ---
 
@@ -46,6 +46,13 @@ Jobs = result of the first full run (2026-10-16), before dedup and filtering.
 ---
 
 ## Changelog
+
+### 2026-10-19 (Phase 2: checked against a full real run)
+All 1,127 jobs from the first full run were checked for wrong merges and missed duplicates. Every merge was correct. Fixes from what was found:
+- **Places:** state codes (`Karlsruhe, BW, DE`), regions (`Leonberg, Württemberg`), street addresses and words like "HQ" / "Zentrale" are no longer read as cities. Umlauts are ignored in city names (`Boblingen` = `Böblingen`), and LinkedIn's `Coblenz` = `Koblenz`. Two jobs are in the same place only if one's main city is among the other's cities.
+- **Companies:** `E.ON` was read as "ON" (the "E." was taken for "e.V."); fixed, and `e.K.` is removed. Also removed: "Deutschland", "Technologies", "Holding", "Wirtschaftsprüfungsgesellschaft", "Niederlassung …" (so `KPMG AG Wirtschaftsprüfungsgesellschaft` = `KPMG Deutschland`). New aliases: Haufe, Scout24, Infineon. LinkedIn job-ad resellers (Jobster, HeyJobs, Instaffo) and WeAreDevelopers' "Allgemeine Informationen" heading count as an unknown company.
+- **Titles:** `(f/m/div.)`, `[M /W /D]`, WeAreDevelopers' cut-off `iv)`, `Auszubildende/r`, and `Werkstudierende` / `Werkstudium` are handled.
+- Result on that run: 1,127 jobs → 1,069 (58 duplicates merged).
 
 ### 2026-10-19 (Phase 2: deduplication)
 - **Normalizers** (`dedup/normalize.py`): URL (https, no `www`, no tracking parameters, no trailing slash), title (gender tags, `Werkstudent*in`, `Working Student` = `Werkstudent` = `Studentische Hilfskraft` = `Student Assistant`, filler words), company (legal forms, aliases from `data/company_aliases.yaml`), city (postal codes, states, `Frankfurt am Main` = `Frankfurt`, `Munich` = `München`, remote words).
@@ -112,6 +119,9 @@ Jobs = result of the first full run (2026-10-16), before dedup and filtering.
 
 | Date | Problem | Cause | Fix |
 |---|---|---|---|
+| 10-19 | "Karlsruhe, BW, DE" and "Stuttgart, BW, DE" counted as the same place | "BW" (and "Württemberg", street names …) was read as a second city, and any shared city counted | State codes and regions are not cities; only a job's main city is compared |
+| 10-19 | E.ON became company "on" | The "E." looked like the start of "e.V." | Remove only "e.V." / "e.K." as a whole |
+| 10-19 | foorilla jobs that are on other boards were not merged (24 pairs) | foorilla's list has no company name | Kept apart for now; Phase 3 reads the company from the job page, then the normal rules apply |
 | 10-19 | The plan's fuzzy rule would merge "Werkstudent (m/w/d)" with "Werkstudent Data Science" | `token_set_ratio` is 100 whenever one title's words are a subset of the other's | Extra words only count as the same title if `token_sort_ratio >= 80` (it compares length) |
 | 10-19 | A 1,500-job stress test merged "Werkstudent HR Backend Sales" with "Werkstudent Design Backend Sales" (score 93) | `token_set_ratio` stays high when the one differing word is short | Look at the differing words instead: they must be spelling variants ("Engineer"/"Engineering") |
 | 10-19 | Same test: one company's "Software" and "Software Embedded" jobs merged | Fuzzy rules can't tell a shortened copy from a second, more specific job | Level 4 never merges two listings from the same board (only copies on another board) |
@@ -177,14 +187,16 @@ Jobs = result of the first full run (2026-10-16), before dedup and filtering.
 - **Descriptions are missing** for connecticum, e-fellows, Fraunhofer, germantechjobs and workingstudentjobs (list pages only). The probe detail pages show e-fellows + workingstudentjobs have JSON-LD `JobPosting` and Fraunhofer has microdata, so one shared "fetch description" step can cover most sites.
 - **germantechjobs has very few student jobs** (≈40 internships of 1093, 38 English). Kept, but it's a low-yield source.
 - **Arbeitnow takes ~5 min** (3s × all pages). Fine for a daily run.
+- **foorilla has no company names**, so its copies of jobs from other boards (≈24 in the first run) aren't merged until Phase 3 reads the company from each job page.
+- **Ramstein's permanent and temporary "Elektroniker" posts** (same title and city, two IDs) are merged into one job. Both links are kept; the descriptions differ.
 - **A board listing one job twice with slightly different titles** stays two jobs (connecticum has the Fraunhofer backend job with and without " - C/C++"). The price of never fuzzy-merging within one board.
 - **English/German twins are only merged when the titles normalize the same.** "Student Assistant Windows Binary Fuzzing" = "Studentische Hilfskraft im Bereich Windows Binary Fuzzing" (merged), but "… Backend Development …" vs "… Backend-Entwicklung …" stays two jobs (no translation of topic words).
 - **Two Fraunhofer institutes in the same city with the exact same title** would merge (the alias joins all institutes). Both links are kept.
 - **The main record's title/description may be the German version** when both versions come from the same kind of source. Phase 3 should use `job_sources.data` to prefer the English one.
-- **Company names that differ beyond legal forms** ("Deloitte" vs "Deloitte Wirtschaftsprüfungsgesellschaft") only match after adding an alias. `werkbot dedup --dry-run` shows what merged, to spot misses.
+- **Company names that differ beyond legal forms and the removed words** only match after adding an alias to `data/company_aliases.yaml`. `werkbot dedup --dry-run` shows what merged, to spot misses.
 - **Expiry counts days since last seen, for any source.** If a source is broken for 14 days, its jobs expire (and come back as `reposted`).
 
 ## Next
 
-1. Run `werkbot dedup --dry-run --groups 30` on a real full run and check the merged groups; add company aliases for misses
+1. Phase 3: read foorilla's company from the job page (then its duplicates merge)
 2. Phase 3: filters (language, location, role) + shared "fetch description" step for sources whose lists have no description
