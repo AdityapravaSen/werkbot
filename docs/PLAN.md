@@ -94,6 +94,8 @@ Normalize these fields before comparing anything:
 
 Level 4 only compares jobs from the same company, so it stays fast even with thousands of jobs.
 
+*As built (Phase 2):* `token_set_ratio >= 90` alone merged different jobs in testing: it is 100 whenever one title's words are a subset of the other's ("Werkstudent" vs "Werkstudent Data Science"), and above 90 when titles differ in one short word ("Werkstudent HR Backend" vs "Werkstudent Design Backend" = 93). So level 4 looks at the words that differ: same words in any order; or only extra words, with `token_sort_ratio >= 80`; or differing words that are spelling variants (`ratio >= 80`). It never merges two listings from the same board, and groups are only joined if every pair across them matches. Until embeddings exist (Phase 4), borderline titles (85–89) need near-identical description text. Details in `progress.md`.
+
 ### 3.3 Merge instead of delete
 
 When duplicates are found, keep **one main record** and store all links to it:
@@ -141,7 +143,7 @@ After each run, a test query confirms there are no duplicate `fingerprint` or `u
 7. Group E: LinkedIn via `python-jobspy`.
 8. Group C: inspect foorilla and DFKI network requests, then build the adapters (Playwright fallback).
 9. Group D: page watchers for the two MPI pages.
-10. Run everything with one command: `python -m jobhunt scrape`.
+10. Run everything with one command: `werkbot scrape`.
 
 ### Phase 2: Deduplication (1 evening)
 11. Normalizer functions (URL, title, company, city).

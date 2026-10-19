@@ -14,10 +14,12 @@ class Settings(BaseSettings):
     home_city: str = "Kaiserslautern"
     max_distance_km: int = 100
     max_age_days: int = 7
+    expire_after_days: int = 14  # a job not seen for this long is marked expired
 
     db_path: Path = Path("data/werkbot.db")
     sources_path: Path = Path("data/sources.yaml")
     resume_path: Path = Path("data/master_resume.yaml")
+    company_aliases_path: Path = Path("data/company_aliases.yaml")
     output_dir: Path = Path("output")
 
     # Polite scraping defaults

@@ -39,7 +39,8 @@ uv sync --group dev --all-extras       # everything
 |---|---|
 | `werkbot sources [--all]` | List configured sources and which adapters are built |
 | `werkbot init-db` | Create the SQLite database (safe to rerun) |
-| `werkbot scrape [-s NAME]` | Scrape all enabled sources, or one |
+| `werkbot scrape [-s NAME] [--no-save]` | Scrape all enabled sources (or some), then merge them into the database |
+| `werkbot dedup [--dry-run]` | Merge the last raw results (`output/raw/`) into the database without scraping; `--dry-run` only shows the duplicates |
 | `werkbot check-db` | Fail if any duplicate jobs slipped into the database |
 
 ## Project layout

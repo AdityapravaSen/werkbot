@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS jobs (
     fingerprint    TEXT    NOT NULL UNIQUE,      -- sha256(company + title + city), normalized
     title          TEXT    NOT NULL,
     company        TEXT    NOT NULL,
-    city           TEXT,
+    city           TEXT,                          -- normalized first city, 'remote' or ''
     remote         INTEGER NOT NULL DEFAULT 0,
     description    TEXT    NOT NULL DEFAULT '',
     language       TEXT,
@@ -18,7 +18,17 @@ CREATE TABLE IF NOT EXISTS jobs (
     last_seen_at   TEXT    NOT NULL DEFAULT (datetime('now')),
     status         TEXT    NOT NULL DEFAULT 'new' -- new | reposted | expired | filtered_out
                    CHECK (status IN ('new', 'reposted', 'expired', 'filtered_out', 'active')),
-    main_url       TEXT    NOT NULL
+    main_url       TEXT    NOT NULL,
+    -- Phase 2 (dedup)
+    main_source    TEXT    NOT NULL DEFAULT '',   -- source of main_url (decides link priority)
+    apply_url      TEXT,
+    location       TEXT,                          -- as the main source wrote it
+    company_norm   TEXT    NOT NULL DEFAULT '',   -- normalized, for fuzzy matching across runs
+    title_norm     TEXT    NOT NULL DEFAULT '',
+    cities         TEXT    NOT NULL DEFAULT '',   -- all normalized cities, '|'-separated
+    job_types      TEXT    NOT NULL DEFAULT '[]', -- JSON list
+    german_required INTEGER,                      -- 1 / 0 / NULL = unknown
+    reposted_at    TEXT                           -- when an expired job came back
 );
 
 CREATE TABLE IF NOT EXISTS job_sources (
@@ -28,7 +38,8 @@ CREATE TABLE IF NOT EXISTS job_sources (
     source_job_id  TEXT,
     url            TEXT    NOT NULL,
     url_hash       TEXT    NOT NULL UNIQUE,       -- sha256(normalized url)
-    seen_at        TEXT    NOT NULL DEFAULT (datetime('now')),
+    seen_at        TEXT    NOT NULL DEFAULT (datetime('now')),  -- last time this link was seen
+    data           TEXT    NOT NULL DEFAULT '{}',  -- the full record from this source (JSON)
     UNIQUE (source, source_job_id)
 );
 
@@ -55,9 +66,31 @@ CREATE TABLE IF NOT EXISTS page_watch (
     changed_at     TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company);
-CREATE INDEX IF NOT EXISTS idx_jobs_first_seen ON jobs(first_seen_at);
 """
+
+# Created after the column migration, because some use Phase 2 columns.
+INDEXES = """
+CREATE INDEX IF NOT EXISTS idx_jobs_company ON jobs(company);
+CREATE INDEX IF NOT EXISTS idx_jobs_company_norm ON jobs(company_norm);
+CREATE INDEX IF NOT EXISTS idx_jobs_first_seen ON jobs(first_seen_at);
+CREATE INDEX IF NOT EXISTS idx_job_sources_job ON job_sources(job_id);
+"""
+
+# Columns added after Phase 0. A database created earlier gets them with ALTER TABLE.
+ADDED_COLUMNS = {
+    "jobs": {
+        "main_source": "TEXT NOT NULL DEFAULT ''",
+        "apply_url": "TEXT",
+        "location": "TEXT",
+        "company_norm": "TEXT NOT NULL DEFAULT ''",
+        "title_norm": "TEXT NOT NULL DEFAULT ''",
+        "cities": "TEXT NOT NULL DEFAULT ''",
+        "job_types": "TEXT NOT NULL DEFAULT '[]'",
+        "german_required": "INTEGER",
+        "reposted_at": "TEXT",
+    },
+    "job_sources": {"data": "TEXT NOT NULL DEFAULT '{}'"},
+}
 
 # Run after every scrape: any row returned means dedup let something through.
 DUPLICATE_CHECKS = {
@@ -66,6 +99,9 @@ DUPLICATE_CHECKS = {
     ),
     "duplicate url hashes": (
         "SELECT url_hash, COUNT(*) FROM job_sources GROUP BY url_hash HAVING COUNT(*) > 1"
+    ),
+    "jobs without a source link": (
+        "SELECT id, title FROM jobs WHERE id NOT IN (SELECT job_id FROM job_sources)"
     ),
 }
 
@@ -79,8 +115,19 @@ def connect(path: Path) -> sqlite3.Connection:
 
 
 def init_db(path: Path) -> None:
-    with connect(path) as conn:
-        conn.executescript(SCHEMA)
+    """Create missing tables and columns. Safe to run on every start."""
+    conn = connect(path)
+    try:
+        with conn:
+            conn.executescript(SCHEMA)
+            for table, columns in ADDED_COLUMNS.items():
+                existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+                for name, ddl in columns.items():
+                    if name not in existing:
+                        conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
+            conn.executescript(INDEXES)
+    finally:
+        conn.close()
 
 
 def find_duplicates(conn: sqlite3.Connection) -> dict[str, list[tuple]]:

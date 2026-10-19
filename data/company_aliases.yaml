@@ -1,0 +1,45 @@
+# Company aliases for deduplication: the same employer written differently on different boards.
+#
+#   canonical name: [regex, ...]
+#
+# Each regex is matched against the company name after it is lowercased, umlauts are
+# written out (ü -> ue), punctuation is replaced by spaces and legal forms (GmbH, AG, SE,
+# e.V., Inc., Group ...) are removed. For example
+# "Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V." becomes
+# "fraunhofer gesellschaft zur foerderung der angewandten forschung".
+#
+# Because legal forms are removed anyway, "Deutsche Bahn AG" and "Deutsche Bahn" already
+# match without an entry here.
+#
+# Only add an alias when you are sure it is one employer: an alias makes jobs with the
+# same title and city count as duplicates.
+
+# Fraunhofer's own site shows the institute ("Fraunhofer IESE"); connecticum shows only
+# "Fraunhofer-Gesellschaft ...". Different institutes in one city are still kept apart by
+# their titles.
+fraunhofer: ["^fraunhofer\\b"]
+
+dfki:
+  - "^dfki\\b"
+  - "deutsches forschungszentrum fuer kuenstliche intelligenz"
+
+rptu:
+  - "^rptu\\b"
+  - "rheinland pfaelzische technische universitaet"
+  - "technische universitaet kaiserslautern"
+  - "^tu kaiserslautern\\b"
+
+saarland university:
+  - "universitaet des saarlandes"
+  - "^saarland university\\b"
+
+cispa: ["^cispa\\b"]
+
+dlr:
+  - "^dlr\\b"
+  - "deutsches zentrum fuer luft und raumfahrt"
+
+# "Robert Bosch GmbH" and "Bosch", but not "Bosch Rexroth" (a separate company).
+bosch: ["^(robert )?bosch$"]
+
+deutsche telekom: ["^deutsche telekom\\b", "^telekom deutschland$"]
