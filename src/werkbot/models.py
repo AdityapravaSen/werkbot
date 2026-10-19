@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, Field, HttpUrl
 
@@ -22,6 +23,9 @@ class Source(BaseModel):
     adapter: str
     url: str
     enabled: bool = True
+    # Which link wins when the same job is on several sites (dedup):
+    # employer = the company's own careers site > board > aggregator (copies other sites)
+    kind: Literal["employer", "board", "aggregator"] = "board"
     params: dict = Field(default_factory=dict)
     notes: str = ""
 

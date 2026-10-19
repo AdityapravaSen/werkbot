@@ -11,8 +11,10 @@ from rich.table import Table
 
 from werkbot import __version__, db
 from werkbot.adapters import REGISTRY
-from werkbot.config import get_settings
-from werkbot.models import Job
+from werkbot.config import Settings, get_settings
+from werkbot.dedup.normalize import load_aliases
+from werkbot.dedup.store import save_jobs
+from werkbot.models import Job, Source, SourceGroup
 from werkbot.sources import load_sources
 
 app = typer.Typer(help="Find English-speaking Werkstudent jobs and tailor your applications.")
@@ -81,8 +83,9 @@ def scrape(
         None, "--source", "-s", help="Run only these sources (repeat -s for several)."
     ),
     show: int = typer.Option(0, "--show", help="Print the first N jobs as a table."),
+    save: bool = typer.Option(True, "--save/--no-save", help="Merge duplicates into the DB."),
 ) -> None:
-    """Scrape enabled sources and save the raw results to output/raw/<source>.json."""
+    """Scrape enabled sources, save raw results to output/raw/, merge them into the DB."""
     settings = get_settings()
     enabled = load_sources(settings.sources_path)
     unknown = set(source or []) - {s.name for s in enabled}
@@ -126,6 +129,7 @@ def scrape(
         for warning in adapter.warnings:
             console.print(f"          [yellow]- {warning}[/yellow]")
         summary.append((s.name, status, f"{len(jobs)} jobs"))
+        logger.info("RESULT {}: {} ({} jobs) {}", s.name, status, len(jobs), adapter.warnings or "")
 
     if summary:
         table = Table("Source", "Status", "Result")
@@ -135,6 +139,8 @@ def scrape(
         console.print()
         console.print(table)
     console.print(f"\n[bold]{len(all_jobs)} jobs total[/bold], {failed} source(s) failed")
+    logger.info("TOTAL {} jobs from {} sources, {} failed", len(all_jobs), len(summary), failed)
+    db_ok = _save_to_db(all_jobs, settings) if save else True
 
     if show and all_jobs:
         table = Table("Posted", "Title (Ctrl+click to open)", "Company", "Location", "Source")
@@ -148,6 +154,99 @@ def scrape(
             "[dim]All fields incl. links and descriptions: output/raw/<source>.json[/dim]"
         )
     console.print(f"[dim]Full log: {settings.output_dir / 'logs'}[/dim]")
+    if not db_ok:
+        raise typer.Exit(1)
+
+
+@app.command()
+def dedup(
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Only show what would be merged; write nothing."
+    ),
+    groups: int = typer.Option(10, "--groups", help="Show up to N merged groups."),
+) -> None:
+    """Merge the jobs in output/raw/*.json into the database (no scraping)."""
+    settings = get_settings()
+    known = {s.name: s for s in load_sources(settings.sources_path, include_disabled=True)}
+    jobs: list[Job] = []
+    for path in sorted((settings.output_dir / "raw").glob("*.json")):
+        source = known.get(path.stem)
+        if source is None:
+            console.print(f"[yellow]skip[/yellow] {path.name}: not in sources.yaml")
+            continue
+        if source.group == SourceGroup.WATCH:
+            continue
+        rows = json.loads(path.read_text(encoding="utf-8"))
+        jobs += [Job.model_validate(row) for row in rows]
+        console.print(f"read {path.name}: {len(rows)} jobs")
+    if not jobs:
+        console.print("[yellow]No raw results found. Run: werkbot scrape[/yellow]")
+        raise typer.Exit(1)
+    if not _save_to_db(jobs, settings, dry_run=dry_run, show_groups=groups):
+        raise typer.Exit(1)
+
+
+def _save_to_db(
+    jobs: list[Job], settings: Settings, dry_run: bool = False, show_groups: int = 0
+) -> bool:
+    """Merge duplicates, save, print the counts. False if the duplicate check fails."""
+    sources = {s.name: s for s in load_sources(settings.sources_path, include_disabled=True)}
+    jobs = [j for j in jobs if not _is_page_watch(j, sources)]  # alerts, not job postings
+    kinds = {name: s.kind for name, s in sources.items()}
+    db.init_db(settings.db_path)
+    conn = db.connect(settings.db_path)
+    try:
+        result = save_jobs(
+            conn,
+            jobs,
+            kinds,
+            aliases=load_aliases(settings.company_aliases_path),
+            expire_after_days=settings.expire_after_days,
+            dry_run=dry_run,
+            boards={name: s.adapter for name, s in sources.items()},  # one site, one board
+        )
+        problems = {} if dry_run else db.find_duplicates(conn)
+    finally:
+        conn.close()
+
+    merged = result.received - result.groups
+    console.print(
+        f"\n[bold]Database{' (dry run, nothing saved)' if dry_run else ''}:[/bold] "
+        f"{result.received} jobs -> {result.groups} after merging {merged} duplicates | "
+        f"[green]{result.new} new[/green], {result.seen_again} seen before "
+        f"({result.reposted} reposted), {result.links_added} links added, "
+        f"{result.expired} expired"
+    )
+    logger.debug(  # the screen already shows this; the log file keeps it
+        "DB {} jobs, {} merged in run, {} new, {} seen before, {} reposted, {} expired{}",
+        result.received,
+        merged,
+        result.new,
+        result.seen_again,
+        result.reposted,
+        result.expired,
+        " (dry run)" if dry_run else "",
+    )
+    for members, reasons in result.merged_groups[:show_groups]:
+        table = Table("Source", "Title", "Company", "Location", show_header=False, box=None)
+        for j in members:
+            table.add_row(j.source, escape(j.title), escape(j.company), escape(j.location or "?"))
+        console.print(table)
+        console.print(f"  [dim]{escape('; '.join(reasons))}[/dim]")
+    if show_groups and len(result.merged_groups) > show_groups:
+        console.print(f"  [dim]... and {len(result.merged_groups) - show_groups} more groups[/dim]")
+
+    if problems:
+        for name, rows in problems.items():
+            console.print(f"[red]Duplicate check failed - {name}:[/red] {rows[:5]}")
+            logger.error("Duplicate check failed - {}: {}", name, rows[:20])
+        return False
+    return True
+
+
+def _is_page_watch(job: Job, sources: dict[str, Source]) -> bool:
+    source = sources.get(job.source)
+    return source is not None and source.group == SourceGroup.WATCH
 
 
 @app.command("check-db")

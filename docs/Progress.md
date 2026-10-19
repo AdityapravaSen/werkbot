@@ -11,13 +11,13 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 |---|---|---|
 | 0 | Project setup | ✅ Done |
 | 1 | Scrapers | ✅ Done: all 14 sources built and live-tested (2026-10-16) |
-| 2 | Deduplication | ⬜ Not started |
+| 2 | Deduplication + SQLite | ✅ Done (2026-10-19) |
 | 3 | Filtering (language, location, role) | ⬜ Not started |
 | 4 | Fit scoring | ⬜ Not started |
 | 5 | Resume + cover letter tailoring (LaTeX) | ⬜ Not started |
 | 6 | Delivery + daily schedule | ⬜ Not started |
 
-**Tests:** 53 passing · **Phase 1 complete** (2026-10-16)
+**Tests:** 132 passing · **Phase 2 complete** (2026-10-19) · **Branch:** `phase-2-dedup`
 
 ---
 
@@ -46,6 +46,15 @@ Jobs = result of the first full run (2026-10-16), before dedup and filtering.
 ---
 
 ## Changelog
+
+### 2026-10-19 (Phase 2: deduplication)
+- **Normalizers** (`dedup/normalize.py`): URL (https, no `www`, no tracking parameters, no trailing slash), title (gender tags, `Werkstudent*in`, `Working Student` = `Werkstudent` = `Studentische Hilfskraft` = `Student Assistant`, filler words), company (legal forms, aliases from `data/company_aliases.yaml`), city (postal codes, states, `Frankfurt am Main` = `Frankfurt`, `Munich` = `München`, remote words).
+- **Four duplicate levels** (`dedup/match.py`): same URL → same source ID → same company + title + city → similar title at the same company and place, from a different board. "Similar" = same words in any order, a few extra words, or spelling variants (see `title_rule`).
+- **Merge rules** (`dedup/merge.py`): main link from the best `kind` (employer > board > aggregator, new field in `sources.yaml`), longest description, earliest date, every link kept.
+- **SQLite upsert** (`dedup/store.py`): the same four levels against the database, so a job is never stored twice across runs. Statuses: `new` → `active` → `expired` (14 days unseen) → `reposted` → `active`. Each source's full record is kept in `job_sources.data`.
+- **Database:** new columns are added automatically to an existing `werkbot.db` (no need to delete it). New check: every job must have at least one source link.
+- **CLI:** `scrape` now saves to the database (`--no-save` to skip). New `werkbot dedup [--dry-run]` merges the last raw results without scraping. The duplicate check runs after every save; a failure exits with code 1.
+- **Tests with real duplicates:** Fraunhofer's own site vs connecticum (17 live listings from 2026-10-19) and Fraunhofer vs workingstudentjobs (the existing page fixtures).
 
 ### 2026-10-16 (Phase 1 wrap-up, from the full-run log)
 - **Arbeitnow:** the API is **not sorted by date** (each page's oldest job swings between 10-09 and 10-14), so stopping at the first "too old" page never happens. `max_pages` raised 40 → 100 so every page is read; the 7-day filter still runs per job.
@@ -103,6 +112,12 @@ Jobs = result of the first full run (2026-10-16), before dedup and filtering.
 
 | Date | Problem | Cause | Fix |
 |---|---|---|---|
+| 10-19 | The plan's fuzzy rule would merge "Werkstudent (m/w/d)" with "Werkstudent Data Science" | `token_set_ratio` is 100 whenever one title's words are a subset of the other's | Extra words only count as the same title if `token_sort_ratio >= 80` (it compares length) |
+| 10-19 | A 1,500-job stress test merged "Werkstudent HR Backend Sales" with "Werkstudent Design Backend Sales" (score 93) | `token_set_ratio` stays high when the one differing word is short | Look at the differing words instead: they must be spelling variants ("Engineer"/"Engineering") |
+| 10-19 | Same test: one company's "Software" and "Software Embedded" jobs merged | Fuzzy rules can't tell a shortened copy from a second, more specific job | Level 4 never merges two listings from the same board (only copies on another board) |
+| 10-19 | One short title could chain two different jobs ("… Software" ~ "… Software Frontend" and ~ "… Software Backend") | Union of pairwise matches is transitive | Level 4 only joins two groups if every pair across them is similar |
+| 10-19 | The same Fraunhofer job never matched across boards | Fraunhofer's site says "Fraunhofer SIT", connecticum says "Fraunhofer-Gesellschaft zur Förderung … e.V." | Company alias `fraunhofer` in `data/company_aliases.yaml` |
+| 10-19 | Different foorilla jobs with the same title would merge | Adapters write "Unknown" when a board has no company | Unknown companies never match on company/title (levels 3–4), only on URL or ID |
 | 10-16 | Arbeitnow always hit the 40-page cap | The API isn't sorted by date, so "a whole page too old → stop" never triggers | Read all pages (cap 100); filter age per job |
 | 10-16 | Log file didn't show what LinkedIn/DFKI returned | Only some adapters logged counts; the summary table went to the screen only | Every source logs `RESULT`, the run logs `TOTAL` |
 | 10-16 | Full run crashed after Arbeitnow: `UnicodeEncodeError: 'charmap' codec can't encode '\u2192'` | Piped output on Windows uses cp1252, which has no `→` (or Chinese titles) | CLI forces UTF-8 output; status lines are plain ASCII; regression test simulates cp1252. Every run now also writes `output/logs/werkbot_<date>.log` |
@@ -144,6 +159,13 @@ Jobs = result of the first full run (2026-10-16), before dedup and filtering.
 | Test fixtures are trimmed copies of real pages | Tests check against the actual markup, not what we assume it looks like |
 | WeAreDevelopers: read Markdown, not HTML cards | Plain text with labelled fields; far less likely to break on a redesign |
 | Fit score, not "chance of getting hired" | No tool can predict hiring honestly |
+| Dedup leans towards keeping jobs apart | A missed duplicate shows a job twice; a wrong merge hides a job you might want |
+| English and German versions of one posting count as one job when their titles normalize the same | Same position; all links are kept, so Phase 3 can pick the English one |
+| Company aliases live in `data/company_aliases.yaml` | Adding an employer's other name is a config change |
+| Borderline titles (85–89) need near-identical description text, not embeddings (yet) | Embeddings come with Phase 4; the check is pluggable (`confirm=`) |
+| Fuzzy matching (level 4) only across boards | Within one board, two IDs with different titles are almost always two jobs |
+| Page-watch items (MPI) are not stored as jobs | They're change alerts, not postings; their snapshot logic stays in `output/watch/` |
+| An unknown city is compatible with any city (level 4 only) | Some boards omit the city; the title must still match closely |
 
 **Open:** output format. The plan says Telegram; the later discussion favoured a static website + optional Telegram notification (no server). To decide before Phase 6.
 
@@ -155,10 +177,14 @@ Jobs = result of the first full run (2026-10-16), before dedup and filtering.
 - **Descriptions are missing** for connecticum, e-fellows, Fraunhofer, germantechjobs and workingstudentjobs (list pages only). The probe detail pages show e-fellows + workingstudentjobs have JSON-LD `JobPosting` and Fraunhofer has microdata, so one shared "fetch description" step can cover most sites.
 - **germantechjobs has very few student jobs** (≈40 internships of 1093, 38 English). Kept, but it's a low-yield source.
 - **Arbeitnow takes ~5 min** (3s × all pages). Fine for a daily run.
-- **The same job can appear twice within one source** (e.g. Ramstein posts one listing per open position). Phase 2 merges them.
+- **A board listing one job twice with slightly different titles** stays two jobs (connecticum has the Fraunhofer backend job with and without " - C/C++"). The price of never fuzzy-merging within one board.
+- **English/German twins are only merged when the titles normalize the same.** "Student Assistant Windows Binary Fuzzing" = "Studentische Hilfskraft im Bereich Windows Binary Fuzzing" (merged), but "… Backend Development …" vs "… Backend-Entwicklung …" stays two jobs (no translation of topic words).
+- **Two Fraunhofer institutes in the same city with the exact same title** would merge (the alias joins all institutes). Both links are kept.
+- **The main record's title/description may be the German version** when both versions come from the same kind of source. Phase 3 should use `job_sources.data` to prefer the English one.
+- **Company names that differ beyond legal forms** ("Deloitte" vs "Deloitte Wirtschaftsprüfungsgesellschaft") only match after adding an alias. `werkbot dedup --dry-run` shows what merged, to spot misses.
+- **Expiry counts days since last seen, for any source.** If a source is broken for 14 days, its jobs expire (and come back as `reposted`).
 
 ## Next
 
-1. Confirm LinkedIn in the next full run (`RESULT linkedin_…` lines in the log), then merge `phase-1c` into main
-2. Phase 2: deduplication + saving to SQLite
-3. Phase 3: filters + shared "fetch description" step for sources whose lists have no description
+1. Run `werkbot dedup --dry-run --groups 30` on a real full run and check the merged groups; add company aliases for misses
+2. Phase 3: filters (language, location, role) + shared "fetch description" step for sources whose lists have no description

@@ -1,0 +1,158 @@
+{
+    "_about": "Real listings, copied on 2026-10-19 from jobs.fraunhofer.de (search 'fuzzing') and connecticum.de (search 'Fraunhofer'). Fields as our adapters produce them. 'tag' is only for the tests.",
+    "jobs": [
+        {
+            "tag": "F1",
+            "title": "Studentische Hilfskraft Backend-Entwicklung von Security/Hacking Tools - C/C++",
+            "company": "Fraunhofer SIT",
+            "url": "https://jobs.fraunhofer.de/job/Darmstadt-Studentische-Hilfskraft-Backend-Entwicklung-von-SecurityHacking-Tools-CC%2B%2B-64295/765900201/",
+            "source": "fraunhofer",
+            "source_job_id": "765900201",
+            "location": "Darmstadt"
+        },
+        {
+            "tag": "F2",
+            "title": "Student Assistant Backend Development of Security/Hacking Tools - C/C++",
+            "company": "Fraunhofer SIT",
+            "url": "https://jobs.fraunhofer.de/job/Darmstadt-Student-Assistant-Backend-Development-of-SecurityHacking-Tools-CC%2B%2B-64295/1041386301/",
+            "source": "fraunhofer",
+            "source_job_id": "1041386301",
+            "location": "Darmstadt"
+        },
+        {
+            "tag": "F3",
+            "title": "Werkstudent*in im Bereich emulator-basiertes Fuzzing",
+            "company": "Fraunhofer IOSB",
+            "url": "https://jobs.fraunhofer.de/job/Karlsruhe-Werkstudentin-im-Bereich-emulator-basiertes-Fuzzing-76131/1261136101/",
+            "source": "fraunhofer",
+            "source_job_id": "1261136101",
+            "location": "Karlsruhe"
+        },
+        {
+            "tag": "F4",
+            "title": "Studentische Hilfskraft im Bereich Windows Binary Fuzzing",
+            "company": "Fraunhofer SIT",
+            "url": "https://jobs.fraunhofer.de/job/Darmstadt-Studentische-Hilfskraft-im-Bereich-Windows-Binary-Fuzzing-64295/765353001/",
+            "source": "fraunhofer",
+            "source_job_id": "765353001",
+            "location": "Darmstadt"
+        },
+        {
+            "tag": "F5",
+            "title": "Student Assistant Windows Binary Fuzzing",
+            "company": "Fraunhofer SIT",
+            "url": "https://jobs.fraunhofer.de/job/Darmstadt-Student-Assistant-Windows-Binary-Fuzzing-64295/1041945101/",
+            "source": "fraunhofer",
+            "source_job_id": "1041945101",
+            "location": "Darmstadt"
+        },
+        {
+            "tag": "F6",
+            "title": "Wissenschaftliche*r Mitarbeiter*in - Softwaresicherheit & Programmanalyse (deutschlandweit)",
+            "company": "Fraunhofer SIT",
+            "url": "https://jobs.fraunhofer.de/job/Darmstadt-Wissenschaftlicher-Mitarbeiterin-Softwaresicherheit-&-Programmanalyse-%28deutschlandweit%29-64295/765355701/",
+            "source": "fraunhofer",
+            "source_job_id": "765355701",
+            "location": "Darmstadt"
+        },
+        {
+            "tag": "F7",
+            "title": "Research Assistant - Software Security & Program Analysis (anywhere in Germany)",
+            "company": "Fraunhofer SIT",
+            "url": "https://jobs.fraunhofer.de/job/Darmstadt-Research-Assistant-Software-Security-&-Program-Analysis-%28anywhere-in-Germany%29-64295/887698201/",
+            "source": "fraunhofer",
+            "source_job_id": "887698201",
+            "location": "Darmstadt"
+        },
+        {
+            "tag": "C1",
+            "title": "Student Assistant Windows Binary Fuzzing",
+            "company": "Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.",
+            "url": "https://www.connecticum.de/jobs/student-assistant-windows-binary-fuzzing-1848260",
+            "source": "connecticum",
+            "source_job_id": "1848260",
+            "location": "Darmstadt"
+        },
+        {
+            "tag": "C2",
+            "title": "Student Assistant Backend Development of Security/Hacking Tools",
+            "company": "Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.",
+            "url": "https://www.connecticum.de/jobs/student-assistant-backend-development-of-security-hacking-1848261",
+            "source": "connecticum",
+            "source_job_id": "1848261",
+            "location": "Darmstadt"
+        },
+        {
+            "tag": "C3",
+            "title": "Studentische Hilfskraft im Bereich Backend Entwicklung von Security/Hacking Tools",
+            "company": "Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.",
+            "url": "https://www.connecticum.de/jobs/studentische-hilfskraft-im-bereich-backend-entwicklung-von-1848370",
+            "source": "connecticum",
+            "source_job_id": "1848370",
+            "location": "Darmstadt"
+        },
+        {
+            "tag": "C4",
+            "title": "Werkstudent*in im Bereich emulator-basiertes Fuzzing",
+            "company": "Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.",
+            "url": "https://www.connecticum.de/jobs/werkstudentin-im-bereich-emulator-basiertes-fuzzing-1848375",
+            "source": "connecticum",
+            "source_job_id": "1848375",
+            "location": "Karlsruhe"
+        },
+        {
+            "tag": "C6",
+            "title": "Studentische Hilfskraft Backend-Entwicklung von Security/Hacking Tools - C/C++",
+            "company": "Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.",
+            "url": "https://www.connecticum.de/jobs/studentische-hilfskraft-backend-entwicklung-von-security-1848406",
+            "source": "connecticum",
+            "source_job_id": "1848406",
+            "location": "Darmstadt"
+        },
+        {
+            "tag": "C7",
+            "title": "Studentische Hilfskraft im Bereich Windows Binary Fuzzing",
+            "company": "Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.",
+            "url": "https://www.connecticum.de/jobs/studentische-hilfskraft-im-bereich-windows-binary-fuzzing-1848496",
+            "source": "connecticum",
+            "source_job_id": "1848496",
+            "location": "Darmstadt"
+        },
+        {
+            "tag": "C8",
+            "title": "Studentische Hilfskraft - Secure Software Engineering in Heilbronn",
+            "company": "Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.",
+            "url": "https://www.connecticum.de/jobs/studentische-hilfskraft-secure-software-engineering-in-1848547",
+            "source": "connecticum",
+            "source_job_id": "1848547",
+            "location": "Heilbronn"
+        },
+        {
+            "tag": "C9",
+            "title": "STUDENTISCHE HILFSKRAFT im Bereich Informationsvisualisierung und Interaktion",
+            "company": "Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.",
+            "url": "https://www.connecticum.de/jobs/studentische-hilfskraft-im-bereich-1848678",
+            "source": "connecticum",
+            "source_job_id": "1848678",
+            "location": "Bonn"
+        },
+        {
+            "tag": "C18",
+            "title": "Student Assistant for Continuing Education Courses in IT Forensics and AI Security",
+            "company": "Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.",
+            "url": "https://www.connecticum.de/jobs/student-assistant-for-continuing-education-courses-in-it-1856649",
+            "source": "connecticum",
+            "source_job_id": "1856649",
+            "location": "Darmstadt"
+        },
+        {
+            "tag": "C19",
+            "title": "STUDENTISCHE HILFSKRAFT im Bereich Software-Entwicklung für Cyber-Sicherheit",
+            "company": "Fraunhofer-Gesellschaft zur Förderung der angewandten Forschung e.V.",
+            "url": "https://www.connecticum.de/jobs/studentische-hilfskraft-im-bereich-software-entwicklung-1858263",
+            "source": "connecticum",
+            "source_job_id": "1858263",
+            "location": "Bonn"
+        }
+    ]
+}

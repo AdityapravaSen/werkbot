@@ -59,7 +59,52 @@ def test_db_rejects_duplicate_fingerprint(tmp_path):
             conn.execute(
                 "INSERT INTO jobs (fingerprint, title, company, main_url) VALUES (?, ?, ?, ?)", row
             )
+        assert set(db.find_duplicates(conn)) == {"jobs without a source link"}
+        conn.execute(
+            "INSERT INTO job_sources (job_id, source, url, url_hash) VALUES (1, 'x', 'u', 'h')"
+        )
         assert db.find_duplicates(conn) == {}
+
+
+# The jobs and job_sources tables exactly as Phase 0 created them.
+PHASE_0_TABLES = """
+CREATE TABLE jobs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, fingerprint TEXT NOT NULL UNIQUE,
+    title TEXT NOT NULL, company TEXT NOT NULL, city TEXT,
+    remote INTEGER NOT NULL DEFAULT 0, description TEXT NOT NULL DEFAULT '', language TEXT,
+    date_posted TEXT, first_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+    status TEXT NOT NULL DEFAULT 'new'
+        CHECK (status IN ('new', 'reposted', 'expired', 'filtered_out', 'active')),
+    main_url TEXT NOT NULL
+);
+CREATE TABLE job_sources (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    source TEXT NOT NULL, source_job_id TEXT, url TEXT NOT NULL,
+    url_hash TEXT NOT NULL UNIQUE, seen_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (source, source_job_id)
+);
+"""
+
+
+def test_init_db_adds_new_columns_to_an_old_database(tmp_path):
+    """A database created in Phase 0 gets the Phase 2 columns without losing rows."""
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    with sqlite3.connect(path) as conn:
+        conn.executescript(PHASE_0_TABLES)
+        conn.execute(
+            "INSERT INTO jobs (fingerprint, title, company, main_url) VALUES ('f', 't', 'c', 'u')"
+        )
+    db.init_db(path)
+    with db.connect(path) as conn:
+        columns = {r["name"] for r in conn.execute("PRAGMA table_info(jobs)")}
+        assert {"company_norm", "title_norm", "cities", "main_source", "reposted_at"} <= columns
+        assert conn.execute("SELECT title, company_norm FROM jobs").fetchone()[:] == ("t", "")
+        source_columns = {r["name"] for r in conn.execute("PRAGMA table_info(job_sources)")}
+        assert "data" in source_columns
 
 
 def test_cli_output_survives_windows_cp1252_pipe():
