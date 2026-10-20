@@ -143,8 +143,9 @@ def run_filters(conn, filters: Filters, jobs: list[StoredJob] | None = None) -> 
         lang = v.language
         conn.execute(
             """INSERT OR REPLACE INTO job_filters (job_id, decision, reasons, work_mode,
-                   distance_km, places, german_level, ad_language, kinds, is_tech, filtered_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   distance_km, places, german_level, ad_language, kinds, is_tech, filtered_at,
+                   location_decision, role_decision, language_decision)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 job.id,
                 v.decision,
@@ -157,6 +158,9 @@ def run_filters(conn, filters: Filters, jobs: list[StoredJob] | None = None) -> 
                 json.dumps(sorted(v.role.kinds)),
                 None if v.role.tech is None else int(v.role.tech),
                 now,
+                v.location.decision,
+                v.role.decision,
+                lang.decision if lang else None,
             ),
         )
     conn.commit()

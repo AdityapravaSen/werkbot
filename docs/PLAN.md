@@ -164,6 +164,8 @@ After each run, a test query confirms there are no duplicate `fingerprint` or `u
     - **Hard penalties (15%):** German required, onsite too far away, wrong level.
 18. Store the score with a one-line reason, e.g. "missing: Kubernetes, AWS".
 
+*As built (Phase 4):* the LLM only **extracts** the requirements (one request per ad, saved, so it fits the free tiers); checking them against the resume happens locally with skill words from `data/skills.yaml` ("PySpark" implies "Spark"), plus embedding similarity for requirements without a known skill (half met at most). The resume is never sent anywhere. Without a key, requirements come from skill words in the ad's sections. The semantic part uses a multilingual model (`multilingual-e5-small`, German ads compare with an English resume) and is rescaled per run between unrelated ads and an ideal ad built from the resume. Weights, penalties and the model are in `data/scoring.yaml`. Details in `progress.md`.
+
 ### Phase 5: Tailoring (2–3 evenings)
 19. Jinja2-templated LaTeX resume and cover letter.
 20. The LLM only **selects, reorders and rewords** bullets from the master YAML. It never adds skills that aren't there.

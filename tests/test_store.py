@@ -224,6 +224,7 @@ def cli_env(tmp_path, monkeypatch):
     monkeypatch.setenv("WERKBOT_DB_PATH", str(tmp_path / "test.db"))
     monkeypatch.setenv("WERKBOT_SOURCES_PATH", str(ROOT / "data" / "sources.yaml"))
     monkeypatch.setenv("WERKBOT_COMPANY_ALIASES_PATH", str(ROOT / "data" / "company_aliases.yaml"))
+    monkeypatch.setenv("WERKBOT_RESUME_PATH", str(ROOT / "tests" / "fixtures" / "resume.yaml"))
     get_settings.cache_clear()
     yield tmp_path
     get_settings.cache_clear()
@@ -251,8 +252,11 @@ def test_cli_scrape_saves_to_the_database(cli_env, monkeypatch, real):
     assert "7 jobs -> 6" in first.output and "6 new" in first.output  # F4 = F5
     assert "0 new" in second.output and "6 seen before" in second.output
     assert "Database" not in skipped.output
-    # The second run also filtered (offline: no job pages fetched)
+    # The second run also filtered (offline: no job pages fetched) and scored (no LLM or
+    # embeddings in tests: skill words only)
     assert "Filters:" in second.output and "Filters:" not in first.output
+    assert "Scores:" in second.output and "Scores:" not in first.output
+    assert (cli_env / "output" / "scores.csv").exists()
     assert (cli_env / "output" / "filtered.csv").exists()
     assert (cli_env / "output" / "raw" / "fraunhofer.json").exists()
 

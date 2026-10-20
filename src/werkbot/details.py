@@ -12,7 +12,9 @@ most sites, tried in this order:
 
 import html as html_lib
 import json
+import re
 import time
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlsplit
@@ -24,7 +26,7 @@ from selectolax.lexbor import LexborHTMLParser
 
 from werkbot.config import Settings
 from werkbot.dedup.normalize import UNKNOWN_COMPANIES, _words, fold
-from werkbot.filters.config import DetailRules
+from werkbot.filters.config import DetailRules, SiteLimit
 from werkbot.text import html_to_text
 
 # Page parts that hold the description on sites without structured data.
@@ -50,6 +52,34 @@ def site_of(url: str) -> str:
     host = (urlsplit(url).hostname or "").lower()
     parts = host.removeprefix("www.").split(".")
     return ".".join(parts[-2:]) if len(parts) >= 2 else host
+
+
+_MD_LINK = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
+_MD_STOP = re.compile(r"^#{1,4}\s*(related|similar|more jobs|videos|articles|weitere)", re.I)
+
+
+def markdown_details(text: str) -> Details:
+    """A site's Markdown version of a job page (e.g. WeAreDevelopers' /jobs/<id>.md): the
+    text itself, without link syntax and without the related-content sections at the end."""
+    lines = []
+    for line in text.splitlines():
+        if _MD_STOP.match(line.strip()):
+            break
+        line = _MD_LINK.sub(r"\1", line)
+        line = re.sub(r"^#{1,6}\s*", "", line.strip())
+        line = line.replace("**", "").replace("__", "")
+        lines.append(line)
+    description = re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+    return Details(description=description, method="markdown")
+
+
+def fetch_url(url: str, limit: SiteLimit | None) -> str:
+    """The URL to request for a job link (a site's `rewrite` rule, or the link itself)."""
+    if not limit or not limit.rewrite:
+        return url
+    parts = urlsplit(url)
+    path = re.sub(limit.rewrite[0], limit.rewrite[1], parts.path)
+    return parts._replace(path=path, query="").geturl() if path != parts.path else url
 
 
 def extract_details(page: str, url: str = "", title: str = "") -> Details:
@@ -155,15 +185,20 @@ class FetchStats:
     companies_found: int = 0
     merged: int = 0
     skipped_sites: set[str] = field(default_factory=set)
+    fail_reasons: Counter = field(default_factory=Counter)  # "wearedevelopers.com: HTTP 404"
 
 
-def jobs_needing_details(conn, rules: DetailRules, job_ids: list[int], now: datetime) -> list:
-    """Jobs (from `job_ids`) with no real description that were not tried recently."""
+def jobs_needing_details(conn, rules: DetailRules, job_ids: list[int], now: datetime,
+                         retry_all: bool = False) -> list:  # fmt: skip
+    """Jobs (from `job_ids`) with no real description that were not tried recently
+    (`retry_all`: also the ones tried recently, e.g. after a fix)."""
     if not job_ids:
         return []
     retry_before = (now - timedelta(days=rules.retry_failed_after_days)).strftime(
         "%Y-%m-%d %H:%M:%S"
     )
+    if retry_all:
+        retry_before = "9999"  # every earlier try counts as "long ago"
     marks = ",".join("?" * len(job_ids))
     rows = conn.execute(
         f"""SELECT id, main_url, title, company, company_norm FROM jobs
@@ -223,15 +258,22 @@ def fetch_details(
             last_request[site] = time.monotonic()
             now = timestamp(datetime.now(UTC))
             try:
-                response = client.get(url)
+                response = client.get(fetch_url(url, limit),
+                                      headers=limit.headers if limit else None)  # fmt: skip
                 if response.status_code == 429:
                     stats.skipped_sites.add(site)
                     logger.warning("details: {} rate-limits us; skipping it for this run", site)
                     raise httpx.HTTPStatusError("429", request=response.request, response=response)
                 response.raise_for_status()
-                details = extract_details(response.text, str(response.url), row["title"])
+                if limit and limit.format == "markdown":
+                    details = markdown_details(response.text)
+                else:
+                    details = extract_details(response.text, str(response.url), row["title"])
             except (httpx.HTTPError, ValueError) as exc:
                 stats.failed += 1
+                why = (f"HTTP {exc.response.status_code}" if isinstance(exc, httpx.HTTPStatusError)
+                       else type(exc).__name__)  # fmt: skip
+                stats.fail_reasons[f"{site}: {why}"] += 1
                 logger.debug("details failed for {}: {}", url, exc)
                 conn.execute(
                     "UPDATE jobs SET details_status = 'failed', details_at = ? WHERE id = ?",
@@ -249,6 +291,7 @@ def fetch_details(
                 stats.ok += 1
             else:
                 stats.no_description += 1
+                stats.fail_reasons[f"{site}: no ad text on the page ({details.method})"] += 1
             logger.debug(
                 "details {} via {}: {} chars", url, details.method, len(details.description)
             )

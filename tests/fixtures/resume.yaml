@@ -1,0 +1,50 @@
+# A made-up person for the scoring tests (not a real resume).
+basics:
+  name: Alex Example
+  email: alex@example.com
+  location: Kaiserslautern, Germany
+
+summary_variants:
+  - id: ml
+    text: Machine learning engineer with three years of production experience in large data pipelines.
+
+education:
+  - school: Example University
+    degree: MSc Data Science and Artificial Intelligence
+    start: 2025-10
+    end: present
+  - school: Other University
+    degree: BTech Computer Science
+    start: 2016-08
+    end: 2020-06
+
+experience:
+  - company: Example Bank
+    role: ML Engineer
+    start: 2021-07
+    end: 2024-06
+    bullets:
+      - text: Built feature pipelines in PySpark and Snowflake for credit risk models.
+        tags: [pyspark, data-engineering, ml]
+      - text: Validated machine learning models for model risk management.
+        tags: [model-risk, python]
+  - company: Example Bank
+    role: Data Engineer (part-time)
+    start: 2024-01
+    end: 2024-12
+    bullets:
+      - text: Migrated Hive tables to Databricks.
+        tags: [hive, databricks]
+
+projects:
+  - name: werkbot
+    bullets:
+      - text: Job search pipeline that scrapes 14 sources and scores ads with an LLM.
+        tags: [python, scraping, llm]
+
+skills:
+  languages: [Python, Scala, SQL]
+  data: [PySpark, Snowflake, Hive, Databricks, Airflow]
+  ml: [scikit-learn, PyTorch, NLP]
+  tools: [Git, Docker, Weights & Biases]
+  spoken: ["English (fluent)", "German (B1)"]
