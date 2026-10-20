@@ -6,7 +6,7 @@ Finds English-speaking **Werkstudent / HiWi** jobs in Germany across 14 job boar
 scrape → normalize → deduplicate → filter → score → tailor → deliver
 ```
 
-> **Status:** Phase 0 (project setup). See [`docs/PLAN.md`](docs/PLAN.md) for the full plan.
+> **Status:** Phases 0–4 built (scraping, dedup, filters, fit score). See [`docs/PLAN.md`](docs/PLAN.md) for the plan and [`docs/progress.md`](docs/progress.md) for what's done.
 
 ## Setup
 
@@ -28,7 +28,7 @@ Optional extras:
 uv sync --group dev --extra browser    # Playwright, for JavaScript-heavy sites
 uv run playwright install chromium
 uv sync --group dev --extra linkedin   # python-jobspy
-uv sync --group dev --extra ml         # local embeddings (large download)
+uv sync --group dev --extra ml         # local embeddings for the fit score (large download)
 uv sync --group dev --extra bot        # Telegram
 uv sync --group dev --all-extras       # everything
 ```
@@ -39,9 +39,10 @@ uv sync --group dev --all-extras       # everything
 |---|---|
 | `werkbot sources [--all]` | List configured sources and which adapters are built |
 | `werkbot init-db` | Create the SQLite database (safe to rerun) |
-| `werkbot scrape [-s NAME] [--no-save] [--no-filter]` | Scrape all enabled sources (or some), merge them into the database, then filter |
+| `werkbot scrape [-s NAME] [--no-save] [--no-filter] [--no-score]` | Scrape all enabled sources (or some), merge them into the database, filter, then score |
 | `werkbot dedup [--dry-run]` | Merge the last raw results (`output/raw/`) into the database without scraping; `--dry-run` only shows the duplicates |
 | `werkbot filter [--no-details] [--show N]` | Apply `data/filters.yaml` (location, role, language): every job becomes keep / review / drop; results in `output/filtered.csv` |
+| `werkbot score [--show N] [--no-llm] [--no-embeddings]` | Fit score 0–100 for every job that passed the filters, with a one-line reason ("missing: Kubernetes, (AWS) · German ad"); settings in `data/scoring.yaml`, results in `output/scores.csv` |
 | `werkbot check-db` | Fail if any duplicate jobs slipped into the database |
 
 ## Project layout
@@ -62,6 +63,9 @@ src/werkbot/
 └── sources.py    # loads data/sources.yaml
 data/
 ├── sources.yaml                 # all job sources (edit to add/remove sites)
+├── filters.yaml                 # location, language and role rules (Phase 3)
+├── scoring.yaml                 # fit score weights and penalties (Phase 4)
+├── skills.yaml                  # skill names and spellings for matching (Phase 4)
 └── master_resume.example.yaml   # copy to master_resume.yaml (git-ignored)
 templates/        # LaTeX templates (Phase 5)
 tests/
@@ -70,6 +74,8 @@ tests/
 ## Privacy
 
 This repo is public. Personal files are git-ignored: `.env`, `data/master_resume.yaml`, `data/*.db`, `output/`. Keep it that way.
+
+Fit scoring sends **only the job ad** to the LLM (to list its requirements). Your resume never leaves your computer: matching and embeddings run locally. Free LLM tiers may use what you send to improve their models, which is fine for public job ads but another reason the resume stays local.
 
 ## Development
 

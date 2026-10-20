@@ -1,0 +1,81 @@
+# Fit scoring (Phase 4): how well a job fits YOUR resume, 0-100. Not a chance of being hired.
+# Change anything here, then run: werkbot score
+#
+# score = semantic (how close the ad's text is to your resume)
+#       + coverage (how many of the ad's requirements your resume shows)
+#       + penalties (German, location, level; full points when nothing is wrong)
+# Only jobs with filter decision keep or review are scored.
+
+weights:            # relative; a part that can't be computed shares its weight with the others
+  semantic: 40
+  coverage: 45
+  penalties: 15
+
+semantic:
+  # Local model from Hugging Face (needs: uv sync --extra ml; ~470 MB download the first time).
+  # Multilingual, so German ads compare fine with an English resume.
+  model: intfloat/multilingual-e5-small
+  prefix: "query: "            # e5 models expect this before every text
+  # Raw similarities of a model sit in a narrow band, so they are rescaled per run:
+  # 0 = as close as these unrelated ads, 1 = as close as an ideal ad made from your resume.
+  unrelated_ads:
+    # Written like the text that is compared for each job: the title, then the tasks and
+    # requirements in English (that is how the LLM summarises every ad). Typical student jobs
+    # outside tech, so 0 means "as close as an office job you wouldn't apply for".
+    - "Working Student Marketing\nPlan social media campaigns\nCreate content for newsletters\nOrganise events\nStudent of marketing or communication\nCreative writing skills"
+    - "Working Student HR\nSupport recruiting and onboarding\nSchedule interviews\nMaintain employee records\nStudent of business or psychology\nMS Office"
+    - "Working Student Accounting and Compliance\nPrepare invoices and payments\nSupport audits and contract management\nCheck regulatory requirements\nStudent of business or law\nExcel"
+    - "Working Student Construction Site Management\nSupport the site manager\nCheck construction drawings\nDocument progress on site\nStudent of civil engineering\nDriving licence"
+    - "Werkstudent Verkauf und Kundenservice\nKundenberatung im Laden und am Telefon\nKasse und Warenpräsentation\nFreundliches Auftreten"
+  # A requirement with no matching skill word counts as half met if one of your resume
+  # bullets is at least this close to it. Its own 0-1 scale: 0 = as close as these
+  # requirements of other fields, 1 = as close as "Experience with <one of your skills>".
+  partial_match_min: 0.75
+  unrelated_requirements:
+    - "Experience in social media marketing"
+    - "Knowledge of accounting and bookkeeping"
+    - "Driving licence class B"
+    - "Experience in customer service and sales"
+    - "Studies in civil engineering or architecture"
+    - "Knowledge of employment law"
+  # Jobs whose ad has no text yet (only the title) count as this close: about the middle
+  # of ads with text, so an unknown ad neither tops the list nor disappears.
+  no_ad_text: 0.4
+
+coverage:
+  must_weight: 2       # a must-have counts twice as much as a nice-to-have
+  nice_weight: 1
+  partial: 0.5         # credit for a half-met requirement
+  # Counted as if the ad had this much more weight in requirements, half met. Keeps an ad
+  # that names one or two things from scoring 0 or 100 on coverage, and gives an ad with
+  # no requirements found (e.g. no text yet) a neutral 0.5.
+  prior_weight: 2
+  # Requirements of these kinds are not counted (language is in the penalties; soft skills
+  # like "team player" can't be checked against a resume).
+  ignore_categories: [language, soft]
+
+llm:
+  enabled: true        # false = always use the skill word list (no API key needed)
+  # The model comes from WERKBOT_LLM_MODEL in .env. Only the job ad is sent, never your resume.
+  requests_per_minute: 8
+  max_per_run: 100     # the rest is done next run (free tiers have small daily limits)
+  max_ad_chars: 6000   # longer ads are cut (the requirements are rarely after this)
+  timeout_s: 60
+
+penalties:
+  # How much of the penalty part is lost (1.0 = all of it). They add up, capped at 1.0.
+  german:              # the German level the language filter found in the ad
+    fluent: 1.0
+    required: 0.6
+    good: 0.3
+    plus: 0.0
+  german_ad_no_mention: 0.4   # German ad that says nothing about language
+  no_ad_text: 0.4             # only the title is known (language and requirements unknown)
+  location_review: 0.5        # hybrid outside the area, or the place is unknown
+  role_review: 0.3            # unclear if it is a tech job / the right kind of job
+  senior: 1.0                 # the ad is for a senior / lead position
+  more_years: 0.5             # asks for more years of experience than your resume has
+
+show:
+  min_score: 0           # werkbot score --show lists only jobs with at least this score
+  reason_items: 4        # how many missing requirements the one-line reason names

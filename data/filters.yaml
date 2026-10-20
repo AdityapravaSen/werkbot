@@ -212,3 +212,11 @@ details:
     linkedin.com: {delay_s: 5, max_per_run: 40}
     # connecticum's job pages only show the job's facts, not the ad itself (checked Oct 2026)
     connecticum.de: {skip: true}
+    # foorilla's job page is an empty frame; the ad comes as an htmx fragment, which the
+    # site requests with this header (as its own job list does)
+    foorilla.com: {headers: {HX-Request: "true"}}
+    # WeAreDevelopers: its job pages answer HTTP 403 (Cloudflare bot check) to programs, and
+    # its Markdown route for tools (/jobs/{id}.md) covers only its own ads, not the external
+    # ones (/jobs/ext/...) that the list returns (all tried, Oct 2026). If that changes:
+    #   wearedevelopers.com: {rewrite: ['^/jobs/(?:ext/)?(\d+)[^/]*/?$', '/jobs/\1.md'], format: markdown}
+    wearedevelopers.com: {skip: true}

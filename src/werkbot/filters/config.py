@@ -56,6 +56,11 @@ class SiteLimit(BaseModel):
     delay_s: float | None = None
     max_per_run: int | None = None
     skip: bool = False  # the job pages have no description (fetching would waste requests)
+    headers: dict[str, str] = Field(default_factory=dict)  # extra request headers for the site
+    # Fetch another URL than the job link: [regex, replacement] on the link's path, e.g. the
+    # site's Markdown version of the page
+    rewrite: tuple[str, str] | None = None
+    format: Literal["html", "markdown"] = "html"  # what the fetched page is
 
 
 class DetailRules(BaseModel):

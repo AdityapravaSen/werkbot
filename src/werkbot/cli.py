@@ -90,6 +90,9 @@ def scrape(
     details: bool = typer.Option(
         True, "--details/--no-details", help="Fetch missing descriptions before filtering."
     ),
+    score: bool = typer.Option(
+        True, "--score/--no-score", help="Score the jobs after filtering (werkbot score)."
+    ),
 ) -> None:
     """Scrape enabled sources, save raw results to output/raw/, merge them into the DB."""
     settings = get_settings()
@@ -149,6 +152,8 @@ def scrape(
     db_ok = _save_to_db(all_jobs, settings) if save else True
     if save and filter_jobs and db_ok:
         _run_filters(settings, details=details, show=0)
+        if score:
+            _run_scoring(settings, show=10)
 
     if show and all_jobs:
         table = Table("Posted", "Title (Ctrl+click to open)", "Company", "Location", "Source")
@@ -263,12 +268,15 @@ def filter_command(
         True, "--details/--no-details", help="Fetch missing descriptions from job pages first."
     ),
     show: int = typer.Option(20, "--show", help="Print the first N kept jobs."),
+    retry_details: bool = typer.Option(
+        False, "--retry-details", help="Also retry job pages that failed in the last days."
+    ),
 ) -> None:
     """Apply data/filters.yaml (location, role, language) to the jobs in the database."""
-    _run_filters(get_settings(), details=details, show=show)
+    _run_filters(get_settings(), details=details, show=show, retry=retry_details)
 
 
-def _run_filters(settings: Settings, details: bool, show: int) -> None:
+def _run_filters(settings: Settings, details: bool, show: int, retry: bool = False) -> None:
     from datetime import UTC, datetime
 
     from werkbot.details import fetch_details, jobs_needing_details
@@ -290,7 +298,7 @@ def _run_filters(settings: Settings, details: bool, show: int) -> None:
         if details:
             # Only fetch pages for jobs that can still pass (location and role, from the list)
             passing = [j.id for j in load_jobs(conn) if filters.judge(j, False).decision != "drop"]
-            rows = jobs_needing_details(conn, config.details, passing, datetime.now(UTC))
+            rows = jobs_needing_details(conn, config.details, passing, datetime.now(UTC), retry)
             if rows:
                 todo = min(len(rows), config.details.max_per_run)
                 console.print(
@@ -309,6 +317,8 @@ def _run_filters(settings: Settings, details: bool, show: int) -> None:
                     f"{stats.failed} failed, {stats.companies_found} companies found "
                     f"({stats.merged} merged as duplicates)"
                 )
+                for why, n in stats.fail_reasons.most_common(6):
+                    console.print(f"  [dim]{n} × {escape(why)}[/dim]")
                 if stats.skipped_sites:
                     console.print(f"[yellow]Rate-limited, retried next run:[/yellow] "
                                   f"{', '.join(sorted(stats.skipped_sites))}")  # fmt: skip
@@ -353,6 +363,129 @@ def _show_kept(conn, limit: int) -> None:
         title = f"[link={r['main_url']}]{escape(r['title'])}[/link]"
         table.add_row(title, escape(r["company"]), escape(where), r["work_mode"] or "",
                       r["german_level"] or "")  # fmt: skip
+    console.print(table)
+
+
+@app.command("score")
+def score_command(
+    show: int = typer.Option(20, "--show", help="Print the N best-scoring jobs."),
+    llm: bool = typer.Option(
+        True, "--llm/--no-llm", help="Read requirements with the LLM (else skill words only)."
+    ),
+    embeddings: bool = typer.Option(
+        True, "--embeddings/--no-embeddings", help="Use the local embedding model if installed."
+    ),
+) -> None:
+    """Fit score (0-100) for every job that passed the filters, using data/scoring.yaml."""
+    _run_scoring(get_settings(), show=show, use_llm=llm, use_embeddings=embeddings)
+
+
+def _run_scoring(
+    settings: Settings, show: int, use_llm: bool = True, use_embeddings: bool = True
+) -> None:
+    from werkbot.llm.client import LLM, LLMUnavailable
+    from werkbot.scoring.config import load_scoring_config
+    from werkbot.scoring.embed import EmbeddingsUnavailable, SentenceEmbedder
+    from werkbot.scoring.requirements import Extractor
+    from werkbot.scoring.resume import ResumeMissing, load_resume
+    from werkbot.scoring.score import build_semantic, export_scores_csv, jobs_to_score, score_jobs
+    from werkbot.scoring.skills import Vocabulary
+
+    try:
+        config = load_scoring_config(settings.scoring_path)
+        vocab = Vocabulary.load(settings.skills_path)
+        resume = load_resume(settings.resume_path)
+    except ResumeMissing as exc:
+        console.print(f"\n[yellow]Scoring skipped:[/yellow] {exc}")
+        return
+    except (ValueError, FileNotFoundError) as exc:
+        console.print(f"[red]Scoring settings problem:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    db.init_db(settings.db_path)
+    conn = db.connect(settings.db_path)
+    try:
+        if not conn.execute("SELECT 1 FROM job_filters LIMIT 1").fetchone():
+            console.print("[yellow]No filter results yet. Run: werkbot filter[/yellow]")
+            return
+        old = conn.execute(
+            "SELECT COUNT(*) FROM job_filters WHERE location_decision IS NULL"
+        ).fetchone()[0]
+        if old:
+            console.print(
+                f"[yellow]{old} filter results are from before Phase 4[/yellow] (no location / "
+                "role penalties for them). Run [bold]werkbot filter[/bold] once, then score again."
+            )
+        llms = []
+        if use_llm and config.llm.enabled:
+            # WERKBOT_LLM_MODEL can list several, tried in order ("gemini/...,groq/...")
+            for model in [m.strip() for m in settings.llm_model.split(",") if m.strip()]:
+                try:
+                    llms.append(LLM.from_settings(
+                        model, config.llm.requests_per_minute, config.llm.timeout_s
+                    ))  # fmt: skip
+                except LLMUnavailable as exc:
+                    console.print(f"[yellow]Skipping LLM:[/yellow] {exc}")
+            if not llms:
+                console.print("[yellow]No LLM:[/yellow] using skill words only.")
+        semantic = None
+        if use_embeddings:
+            try:
+                embedder = SentenceEmbedder(config.semantic.model, config.semantic.prefix)
+                semantic = build_semantic(embedder, resume, vocab, config)
+                console.print(
+                    f"[dim]Semantic scale ({config.semantic.model}): unrelated ads "
+                    f"{semantic.scale.low:.3f} = 0, ideal ad {semantic.scale.high:.3f} = 1[/dim]"
+                )
+            except EmbeddingsUnavailable as exc:
+                console.print(f"[yellow]No semantic part:[/yellow] {exc}")
+        extractor = Extractor(conn, vocab, config.llm, llms)
+        todo = len(jobs_to_score(conn))
+        if llms:
+            names = ", then ".join(m.model for m in llms)
+            console.print(
+                f"\nScoring {todo} jobs (new ads are read by {names}; at most "
+                f"{config.llm.requests_per_minute:g} per minute and {config.llm.max_per_run} "
+                "per run, best candidates first) ..."
+            )
+        stats = score_jobs(conn, resume, vocab, config, extractor, semantic)
+        csv_path = settings.output_dir / "scores.csv"
+        export_scores_csv(conn, csv_path)
+        e = extractor.stats
+        console.print(
+            f"\n[bold]Scores:[/bold] {stats.scored} jobs | requirements: {e['asked']} read by "
+            f"the LLM now, {e['saved']} saved from before, {e['keywords']} from skill words"
+            + (f", {e['failed']} the LLM couldn't answer" if e["failed"] else "")
+            + (f", {e['errors']} server errors (retried next run)" if e["errors"] else "")
+        )
+        for switch in extractor.switched:
+            console.print(f"[yellow]Switched model:[/yellow] {escape(switch)}")
+        if extractor.stopped:
+            console.print(f"[yellow]LLM stopped for this run:[/yellow] {escape(extractor.stopped)}"
+                          " (the rest is read next run)")  # fmt: skip
+        logger.info("SCORE {} {}", stats, dict(e))
+        if show:
+            _show_scores(conn, show, config.show.min_score)
+        console.print(f"[dim]All scores with their parts: {csv_path}[/dim]")
+    finally:
+        conn.close()
+
+
+def _show_scores(conn, limit: int, min_score: float) -> None:
+    rows = conn.execute(
+        """SELECT s.fit_score, s.reason, j.title, j.company, j.main_url, f.decision
+           FROM scores s JOIN jobs j ON j.id = s.job_id JOIN job_filters f ON f.job_id = j.id
+           WHERE s.fit_score >= ? ORDER BY s.fit_score DESC, j.first_seen_at DESC LIMIT ?""",
+        (min_score, limit),
+    ).fetchall()
+    if not rows:
+        return
+    table = Table("Score", "Title (Ctrl+click to open)", "Company", "Why")
+    for r in rows:
+        title = f"[link={r['main_url']}]{escape(r['title'])}[/link]"
+        if r["decision"] == "review":
+            title += " [yellow](review)[/yellow]"
+        table.add_row(f"{r['fit_score']:.0f}", title, escape(r["company"]), escape(r["reason"]))
     console.print(table)
 
 

@@ -13,11 +13,11 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 | 1 | Scrapers | ✅ Done: all 14 sources built and live-tested (2026-10-16) |
 | 2 | Deduplication + SQLite | ✅ Done (2026-10-19) |
 | 3 | Filtering (location, role, language) + job page details | ✅ Built (2026-10-19), live run pending |
-| 4 | Fit scoring | ⬜ Not started |
+| 4 | Fit scoring | ✅ Built (2026-10-20), first run with your resume + LLM key pending |
 | 5 | Resume + cover letter tailoring (LaTeX) | ⬜ Not started |
 | 6 | Delivery + daily schedule | ⬜ Not started |
 
-**Tests:** 298 passing · **Phase 3 built** (2026-10-19) · **Branch:** `phase-3-filters`
+**Tests:** 358 passing · **Phase 4 built** (2026-10-20) · **Branch:** `phase-4-scoring`
 
 ---
 
@@ -44,6 +44,35 @@ Jobs = result of the first full run (2026-10-16), before dedup and filtering.
 ---
 
 ## Changelog
+
+### 2026-10-20 (Phase 4: after the first real run)
+- **First run:** 87 ads read by Gemini Flash-Lite in 35 min, then it stopped at "max_per_run (100)". 13 requests had failed with **503 "high demand"** or timeouts, and they counted towards the 100.
+- **Busy server = retry:** a 503 / timeout / dropped connection is retried after 10 s, then 30 s. Only ads read count towards `max_per_run`.
+- **Fallback models:** `WERKBOT_LLM_MODEL=gemini/...,groq/...` (comma-separated). A rate limit or 3 errors in a row hand over to the next model, which answers the same ad.
+- **Best candidates first:** the run's LLM budget went to "Bauingenieurwesen" and "Sozialpädagogik" jobs (filter decision review) because ads were read in database order. Now kept jobs come first, then jobs whose role is clearly right, then by a quick estimate (skill words + semantic).
+- **Semantic anchors** in `scoring.yaml` rewritten in English in the same form as the compared text (title, tasks, requirements): a "Compliance" job scored 69 because the old anchors were short German ads, so every English summary looked close to the resume.
+- "Regression testing" counted as the skill Regression; now Testing. A requirement named twice is named once in the reason.
+- **Second run:** every ad with text has now been read by the LLM (113); the other 204 jobs have **no ad text** (WeAreDevelopers 76, connecticum 74, foorilla 52). The semantic part works (spread 0.15–0.9 for ads with text, data/software jobs on top).
+- **Third run** (with `werkbot filter` done): location/role penalties apply now (Compliance 65 → 53, Legal Ops 70 → 58).
+  - Jobs without ad text: first scored as a title against the resume (always near 0), then without a semantic part, which made them top the list (13 of the top 20 at 78, because their title's skills match). Now they get `semantic.no_ad_text: 0.4`, about the middle of real ads (~62 for a good title).
+  - **Why 204 jobs have no ad text** (database check): WeAreDevelopers 76 pages `failed`, foorilla 52 `no_description`, connecticum skipped on purpose. foorilla's job page is an empty frame; the ad is an htmx fragment the site loads with the header `HX-Request: true`, so `filters.yaml` can now set headers per site and foorilla sends it. WeAreDevelopers' pages do contain the ad (checked one), so the reason for the failures is still open: `werkbot filter` now prints the failure reasons ("wearedevelopers.com: HTTP 403 ×76"), and `--retry-details` tries pages again without waiting 3 days.
+  - Result: foorilla fixed (54 new descriptions; keep 22 → 58). WeAreDevelopers: `HTTP 403` from Cloudflare for every program, also with normal browser headers. Not worked around (that would mean pretending to be a browser); tried the site's own route for tools from its `llms.txt` (`/jobs/{id}.md`): it works, but only for WeAreDevelopers' own ads, and every job in our list is an external one (`/jobs/ext/…`, from Indeed, Adzuna, Careerjet) → `410 Job Not Found`; `.md` and `Accept: text/markdown` on the external pages → 403. So `wearedevelopers.com` is skipped for job pages, like connecticum. (`filters.yaml` can now rewrite a site's job link and read Markdown, kept for sites that offer it.)
+  - The requirement scale's anchors were too close ("0.830 vs 0.839") because whole ads were compared with single bullets. It now uses short unrelated requirements (`semantic.unrelated_requirements`).
+- The filter results in the database were from before Phase 4, so no location/role penalty was applied ("Working Student Compliance" 65). `werkbot score` now says so and asks to run `werkbot filter` once.
+
+### 2026-10-20 (Phase 4: fit score)
+- **`werkbot score`** gives every job that passed the filters (keep or review) a **fit score 0–100** and a one-line reason, e.g. `missing: Kubernetes, (AWS) · German ad` (nice-to-haves in brackets). `scrape` runs it after the filters (`--no-score` to skip). Results: table `scores` and `output/scores.csv`, best first. It is a fit score, not a chance of being hired.
+- **Score = semantic 40 + coverage 45 + penalties 15**, all set in `data/scoring.yaml`. A part that can't be computed gives its weight to the others.
+  - **Coverage** (`scoring/score.py`): each requirement of the ad is checked against the resume: met, half met or missing; must-haves count double. Pulled a little towards 50 % (`prior_weight`) so an ad that names one skill doesn't score 0 or 100.
+  - **Penalties:** from the filters (German level, German ad, hybrid far away, unclear role) and the ad (senior position, more years than the resume shows, no ad text yet).
+  - **Semantic** (`scoring/embed.py`, optional extra `ml`): local multilingual model (`intfloat/multilingual-e5-small`, works for German ads too). Raw similarity is rescaled each run between "as close as some unrelated ads" (0) and "as close as an ideal ad built from your resume" (1), so the scale works for any model.
+- **Requirements from the LLM** (`scoring/requirements.py`, `llm/client.py`, `llm/prompts/requirements.md`): one request per ad lists tasks, must-haves and nice-to-haves as JSON (checked with pydantic, asked again once if broken). Saved by the ad's text in the new table `job_requirements`, so **each ad costs one request ever**. Free-tier friendly: 8 requests/minute, 100 per run, a rate limit (429) or 3 connection errors in a row stop the LLM for the run, an ad the model can't answer properly is retried after 7 days. **Only the ad is sent; the resume never leaves the computer.**
+- **Without an LLM key** (or after the run's limit) requirements come from skill words: in the profile part of the ad they are must-haves, in "nice to have" / tasks they are nice-to-haves, in "we offer" / "about us" they are ignored.
+- **Skill words** (`data/skills.yaml`, `scoring/skills.py`): ~120 skills with their spellings (`K8s` = Kubernetes, `Datenbanken` = Databases) and what they imply (`PySpark` → Spark → Big Data), so "Spark" in an ad is met by "PySpark" on the resume.
+- **Resume** (`scoring/resume.py`): skills from the skills lists, tags, roles and bullet texts; years of experience (overlapping jobs counted once); "enrolled student" from an ongoing degree.
+- **Database:** new table `job_requirements`; `scores` gained `semantic`, `coverage`, `penalty`, `method`, `details` (every requirement and penalty as JSON); `job_filters` stores each filter's own decision. Added automatically.
+- **Dependencies:** `instructor` removed (plain JSON + pydantic is enough and works the same for Gemini, Groq and Ollama); `python-dotenv` listed (loads the API keys from `.env`). Default model `gemini/gemini-flash-lite-latest` (largest free quota).
+- **Tests can no longer touch your data** (`tests/conftest.py`): every test gets its own empty database, output folder and no resume, and can't call a real LLM or load a real model.
 
 ### 2026-10-19 (Phase 3: filters)
 - **All rules in `data/filters.yaml`**, nothing hardcoded. Every job gets `keep`, `review` (probably fits, something unclear) or `drop`, with the reasons. `werkbot filter` runs them; `scrape` runs them automatically after saving. All results: `output/filtered.csv`.
@@ -129,6 +158,11 @@ All 1,127 jobs from the first full run were checked for wrong merges and missed 
 
 | Date | Problem | Cause | Fix |
 |---|---|---|---|
+| 10-20 | `test_missing_api_key` failed on your laptop: "DID NOT RAISE" | LiteLLM loads `.env` itself when imported, and counts an empty `GROQ_API_KEY=` (as in `.env.example`) as a key. A real run would then have sent requests with no key | werkbot loads `.env` itself (`LITELLM_MODE=PRODUCTION`) and treats empty `*_API_KEY` values as missing |
+| 10-20 | Tests took 212 s on your laptop (4 s here) | A CLI test ran `scrape` without its own database setting, so it used your real `data/werkbot.db`: it filtered your 1,069 jobs and fetched job pages from the internet. With Phase 4 it would also have read your resume and used your LLM key | `tests/conftest.py` gives every test a temporary database, output folder and resume path, and blocks the real LLM and embedding model |
+| 10-20 | Jobs without ad text scored 100 in a check on the real jobs | No requirements and no semantic part left only the penalties, which were all fine | Coverage starts at 50 % (`prior_weight`); "no ad text yet" is a penalty |
+| 10-20 | "Optimierung" (process optimisation) counted as a maths skill in many non-tech ads | Too broad a spelling | The skill is "Mathematical Optimization" (operations research, linear programming) |
+| 10-20 | LiteLLM warned on every Gemini request about `temperature` | Gemini 3+ prefers its default temperature | Temperature 0 only for other providers; LiteLLM warnings hidden |
 | 10-19 | "German is a plus" counted as "fluent" in "Fluent English, German is a plus" | A level word was matched to German just because both were in one sentence | Each level word belongs to one language: the one right after it ("fluent English") or right before it ("German is a plus"), within 30 characters |
 | 10-19 | "sehr gute Deutsch- oder Englischkenntnisse" dropped | "oder" means either language is enough | Languages joined by "oder/or" make German a plus |
 | 10-19 | "Werkstudent Sales/Business Development" counted as tech | The tech word "develop*" | Removed; longer phrases ("business development") win over words inside them |
@@ -198,6 +232,11 @@ All 1,127 jobs from the first full run were checked for wrong merges and missed 
 | Fuzzy matching (level 4) only across boards | Within one board, two IDs with different titles are almost always two jobs |
 | Page-watch items (MPI) are not stored as jobs | They're change alerts, not postings; their snapshot logic stays in `output/watch/` |
 | An unknown city is compatible with any city (level 4 only) | Some boards omit the city; the title must still match closely |
+| The LLM only reads the ad; matching against the resume happens locally | Free tiers allow few requests and may use what is sent; an ad's requirements don't change when the resume does, so one saved answer per ad is enough |
+| Requirements saved by the ad's text, not the job ID | Survives merges, and the same ad on two boards costs one request |
+| Skill words with "implies" instead of asking the LLM whether the resume meets each requirement | Free, instant, the same every run, and explainable ("Spark: met by PySpark") |
+| Embedding similarity rescaled per run with anchor texts | Raw cosine values of each model sit in a narrow band; anchors make 0 and 1 mean the same with any model |
+| An ad's requirements are not "met" by similar text alone, only half met | A similar bullet is a hint, not proof |
 
 **Open:** output format. The plan says Telegram; the later discussion favoured a static website + optional Telegram notification (no server). To decide before Phase 6.
 
@@ -210,6 +249,7 @@ All 1,127 jobs from the first full run were checked for wrong merges and missed 
 - **germantechjobs has very few student jobs** (≈40 internships of 1093, 38 English). Kept, but it's a low-yield source.
 - **Arbeitnow takes ~5 min** (3s × all pages). Fine for a daily run.
 - **Job pages not yet checked live** (no saved copy): WeAreDevelopers, foorilla, LinkedIn, DFKI. The generic reader handles them (or leaves them empty); the first real run will show how well. LinkedIn may block page requests; those jobs then stay "review".
+- **WeAreDevelopers job pages can't be read** (Cloudflare 403 for programs; its Markdown route covers only its own ads, not the external ones in our list). Its jobs are scored from the title ("no ad text yet") unless another board has the same job. Later option: fetch the "Apply" link when it is a company career site (~15 % of its jobs; most go to Indeed / Adzuna / Careerjet).
 - **connecticum has no description anywhere** (not in the list, not on the job page), so its jobs stay "review" for the language. The page says the company's language ("Firmensprache"), which could be used later.
 - **Some small municipalities are missing** from the places table (e.g. Ammerbuch, Karlstein am Main, Parsdorf); their jobs go to review.
 - **Same-name places** are picked by state hint, then population ("Wangen, Kreis Göppingen" picks the wrong Wangen). Rare.
@@ -222,8 +262,12 @@ All 1,127 jobs from the first full run were checked for wrong merges and missed 
 - **The main record's title/description may be the German version** when both versions come from the same kind of source. Phase 3 should use `job_sources.data` to prefer the English one.
 - **Company names that differ beyond legal forms and the removed words** only match after adding an alias to `data/company_aliases.yaml`. `werkbot dedup --dry-run` shows what merged, to spot misses.
 - **Expiry counts days since last seen, for any source.** If a source is broken for 14 days, its jobs expire (and come back as `reposted`).
+- **The semantic part is not yet checked with the real model** (no Hugging Face access in the build environment); tested with fake embeddings. The first run prints the scale ("unrelated ads 0.78 = 0, ideal ad 0.91 = 1"); if most jobs end up near 0 or 1, `unrelated_ads` in `scoring.yaml` can be changed.
+- **The LLM prompt is not yet checked on real ads** (tested with fake answers). Check a few rows of `scores.csv` against their ads after the first run.
+- **Free LLM limits are small and change often** (Gemini Flash-Lite roughly hundreds of requests a day, Groq ~1,000; check aistudio.google.com/rate-limit). The first run reads at most 100 ads; the rest follow on later runs, scored with skill words meanwhile.
+- **Skill words cover tech skills only**; a requirement like "experience in a startup" can only be half met through similarity (needs the `ml` extra), otherwise it is not counted.
 
 ## Next
 
-1. First live run with job page details; check `output/filtered.csv` (especially "review") and tune `data/filters.yaml`
-2. Phase 4: fit scoring against the resume (needs `data/master_resume.yaml` and a free Gemini/Groq API key)
+1. Fill in `data/master_resume.yaml`, add a free LLM key to `.env`, `uv sync --group dev --extra ml`, then `werkbot score`; check the top 20 and some reasons against their ads, tune `data/scoring.yaml` / `data/skills.yaml`
+2. Phase 5: tailored LaTeX resume and cover letter

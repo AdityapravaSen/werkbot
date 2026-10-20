@@ -58,14 +58,35 @@ CREATE TABLE IF NOT EXISTS job_filters (
     ad_language    TEXT,                          -- en | de | NULL
     kinds          TEXT    NOT NULL DEFAULT '[]',
     is_tech        INTEGER,
-    filtered_at    TEXT    NOT NULL DEFAULT (datetime('now'))
+    filtered_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+    -- Phase 4 uses each filter's own decision for the penalties
+    location_decision TEXT,
+    role_decision     TEXT,
+    language_decision TEXT
 );
 
 CREATE TABLE IF NOT EXISTS scores (
     job_id         INTEGER PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
     fit_score      REAL    NOT NULL,
     reason         TEXT    NOT NULL DEFAULT '',
-    scored_at      TEXT    NOT NULL DEFAULT (datetime('now'))
+    scored_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    -- Phase 4: the parts of the score (0..1; semantic/coverage NULL = not available)
+    semantic       REAL,
+    coverage       REAL,
+    penalty        REAL,
+    method         TEXT,                          -- requirements from: llm | keywords
+    details        TEXT    NOT NULL DEFAULT '{}'  -- JSON: every requirement and penalty
+);
+
+-- Phase 4: what each ad asks for, as read by the LLM. Keyed by the ad's text, so an ad
+-- costs one request ever, also after a merge or when another board has the same text.
+CREATE TABLE IF NOT EXISTS job_requirements (
+    ad_hash        TEXT    PRIMARY KEY,           -- sha256(title + description)
+    method         TEXT    NOT NULL,              -- llm | failed
+    model          TEXT    NOT NULL DEFAULT '',
+    prompt_version INTEGER NOT NULL,
+    data           TEXT    NOT NULL DEFAULT '{}',
+    created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS applications (
@@ -110,6 +131,18 @@ ADDED_COLUMNS = {
         "details_at": "TEXT",
     },
     "job_sources": {"data": "TEXT NOT NULL DEFAULT '{}'"},
+    "job_filters": {
+        "location_decision": "TEXT",
+        "role_decision": "TEXT",
+        "language_decision": "TEXT",
+    },
+    "scores": {
+        "semantic": "REAL",
+        "coverage": "REAL",
+        "penalty": "REAL",
+        "method": "TEXT",
+        "details": "TEXT NOT NULL DEFAULT '{}'",
+    },
 }
 
 # Run after every scrape: any row returned means dedup let something through.

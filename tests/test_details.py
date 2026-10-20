@@ -69,6 +69,14 @@ def test_page_text_is_only_used_if_it_is_about_the_job():
     assert d.method == "text" and "Modelle" in d.description
 
 
+def test_wearedevelopers_pages_are_skipped():
+    """403 for programs, and no Markdown version of its external ads (checked Oct 2026)."""
+    from werkbot.filters.config import load_filter_config
+
+    rules = load_filter_config(ROOT / "data" / "filters.yaml").details
+    assert rules.per_site["wearedevelopers.com"].skip
+
+
 def test_connecticum_pages_have_no_ad_text():
     """connecticum's job page only lists facts and other jobs, so filters.yaml skips it."""
     from werkbot.filters.config import load_filter_config
@@ -198,3 +206,79 @@ def test_per_site_limits_and_skipped_sites(conn):
     )
     fetch_details(conn, rows, rules, Settings(), ALIASES, transport, sleep=lambda s: None)
     assert len(calls) == 2  # max_per_run for foorilla.com
+
+
+def test_site_headers_failure_reasons_and_retrying_now(conn):
+    """foorilla needs HX-Request to send the ad; failures are counted by reason; with
+    retry_all, pages that failed a moment ago are tried again."""
+    rules = DetailRules.model_validate(
+        {"delay_s": 0, "per_site": {"foorilla.com": {"headers": {"HX-Request": "true"}}}}
+    )
+    save_jobs(conn, [foorilla_job(1)], {}, ALIASES)
+    job_id = conn.execute("SELECT id FROM jobs").fetchone()[0]
+    seen = []
+
+    def handler(request):
+        seen.append(request.headers.get("HX-Request"))
+        return httpx.Response(404)
+
+    rows = jobs_needing_details(conn, rules, [job_id], NOW)
+    stats = fetch_details(conn, rows, rules, Settings(), ALIASES, httpx.MockTransport(handler),
+                          sleep=lambda s: None)  # fmt: skip
+    assert seen == ["true"]
+    assert stats.fail_reasons == {"foorilla.com: HTTP 404": 1}
+    later = datetime.now(UTC)
+    assert jobs_needing_details(conn, rules, [job_id], later) == []
+    assert len(jobs_needing_details(conn, rules, [job_id], later, retry_all=True)) == 1
+
+
+def test_foorilla_has_the_htmx_header_in_the_config():
+    from werkbot.filters.config import load_filter_config
+
+    rules = load_filter_config(ROOT / "data" / "filters.yaml").details
+    assert rules.per_site["foorilla.com"].headers == {"HX-Request": "true"}
+
+
+WAD_MD = """# Working Student IT Helpdesk
+
+**Company:** Isar Aerospace
+**Location:** München, Germany
+
+## Description
+
+Your tasks: set up laptops and accounts, support users in the office and on the shop
+floor, troubleshoot Windows, Microsoft 365, printers and networks. [Apply](https://x.example)
+
+Your profile: enrolled in IT or computer science, fluent English, German is a plus.
+
+## Related videos
+
+- [Some talk](https://www.wearedevelopers.com/videos/1)
+"""
+
+
+def test_a_site_can_be_read_as_markdown_from_another_url(conn):
+    """`rewrite` + `format: markdown`, e.g. a site's Markdown version of its job pages.
+    (Written for WeAreDevelopers' /jobs/<id>.md, which turned out to cover only its own
+    ads; kept for sites that offer the same.)"""
+    rules = DetailRules.model_validate({"delay_s": 0, "per_site": {"wearedevelopers.com": {
+        "rewrite": [r"^/jobs/(?:ext/)?(\d+)[^/]*/?$", r"/jobs/\1.md"],
+        "format": "markdown"}}})  # fmt: skip
+    link = "https://www.wearedevelopers.com/jobs/ext/3157252-working-student-it-helpdesk"
+    job = Job(title="Working Student IT Helpdesk", company="Isar Aerospace", url=link,
+              source="wearedevelopers", source_job_id="3157252", location="München")  # fmt: skip
+    save_jobs(conn, [job], {}, ALIASES)
+    asked = []
+
+    def handler(request):
+        asked.append(str(request.url))
+        return httpx.Response(200, text=WAD_MD)
+
+    rows = jobs_needing_details(conn, rules, [1], NOW)
+    stats = fetch_details(conn, rows, rules, Settings(), ALIASES, httpx.MockTransport(handler),
+                          sleep=lambda s: None)  # fmt: skip
+    assert asked == ["https://www.wearedevelopers.com/jobs/3157252.md"]
+    description = conn.execute("SELECT description FROM jobs").fetchone()[0]
+    assert stats.ok == 1 and description.startswith("Working Student IT Helpdesk")
+    assert "Your profile: enrolled in IT" in description and "Apply" in description
+    assert "](" not in description and "Some talk" not in description  # no links, no extras
