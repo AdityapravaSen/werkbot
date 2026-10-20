@@ -243,14 +243,17 @@ def test_cli_scrape_saves_to_the_database(cli_env, monkeypatch, real):
             return [j for j in real.values() if j.source == "fraunhofer"]
 
     monkeypatch.setitem(REGISTRY, "fraunhofer", FakeFraunhofer)
-    first = CliRunner().invoke(app, ["scrape", "-s", "fraunhofer"])
-    second = CliRunner().invoke(app, ["scrape", "-s", "fraunhofer"])
+    first = CliRunner().invoke(app, ["scrape", "-s", "fraunhofer", "--no-filter"])
+    second = CliRunner().invoke(app, ["scrape", "-s", "fraunhofer", "--no-details"])
     skipped = CliRunner().invoke(app, ["scrape", "-s", "fraunhofer", "--no-save"])
 
     assert first.exit_code == second.exit_code == skipped.exit_code == 0, first.output
     assert "7 jobs -> 6" in first.output and "6 new" in first.output  # F4 = F5
     assert "0 new" in second.output and "6 seen before" in second.output
     assert "Database" not in skipped.output
+    # The second run also filtered (offline: no job pages fetched)
+    assert "Filters:" in second.output and "Filters:" not in first.output
+    assert (cli_env / "output" / "filtered.csv").exists()
     assert (cli_env / "output" / "raw" / "fraunhofer.json").exists()
 
 

@@ -155,6 +155,8 @@ After each run, a test query confirms there are no duplicate `fingerprint` or `u
 15. **Location:** remote, or within about 100 km of Kaiserslautern (hardcoded city list or geocoding).
 16. **Role:** keyword filter for Werkstudent, HiWi, working student, part-time / Teilzeit.
 
+*As built:* all rules live in `data/filters.yaml`. Location = 200 km straight line **or** ≤ 3 h by train (a short list of fast DB connections), remote anywhere in Germany, hybrid outside the area → review; places come from an offline GeoNames table. Language = the German *level* the ad asks for (fluent → drop, good / a plus → keep), not the word "Deutsch". Descriptions missing from list pages are fetched from the job pages first (JSON-LD, microdata, main text). Each job ends as keep / review / drop with its reasons. Details in `progress.md`.
+
 ### Phase 4: Scoring (2 evenings)
 17. Call it a **fit score**, not a "chance of getting hired". No tool can predict hiring. Hybrid score:
     - **Semantic similarity (40%):** embed the resume and the description locally with `sentence-transformers` (e.g. `bge-small`).

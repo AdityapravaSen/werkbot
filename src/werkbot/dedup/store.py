@@ -342,3 +342,65 @@ def _to_int(value: bool | None) -> int | None:
 
 def _to_bool(value: int | None) -> bool | None:
     return None if value is None else bool(value)
+
+
+# ---------- a company found later (Phase 3: job page details) ----------
+
+
+def adopt_company(conn, job_id: int, company: str, aliases=()) -> bool:
+    """Set the company of a job whose board had none (foorilla). If that makes it the
+    same job as one already stored (same company + title + city), merge the two.
+    Returns True when the job was merged into another one."""
+    from werkbot.dedup.normalize import fingerprint, normalize_company
+
+    company_norm = normalize_company(company, aliases)
+    if not company_norm:
+        return False
+    row = conn.execute("SELECT title_norm, city FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    new_fingerprint = fingerprint(company_norm, row["title_norm"], row["city"] or "")
+    other = conn.execute(
+        "SELECT id FROM jobs WHERE fingerprint = ? AND id != ?", (new_fingerprint, job_id)
+    ).fetchone()
+    if other is not None:
+        merge_jobs(conn, keep_id=other["id"], drop_id=job_id)
+        return True
+    conn.execute(
+        "UPDATE jobs SET company = ?, company_norm = ?, fingerprint = ? WHERE id = ?",
+        (company, company_norm, new_fingerprint, job_id),
+    )
+    return False
+
+
+def merge_jobs(conn, keep_id: int, drop_id: int) -> None:
+    """Merge two stored jobs that turned out to be one: all links move to `keep_id`."""
+    keep = conn.execute("SELECT * FROM jobs WHERE id = ?", (keep_id,)).fetchone()
+    drop = conn.execute("SELECT * FROM jobs WHERE id = ?", (drop_id,)).fetchone()
+    first_date = earliest(_parse(keep["date_posted"]), _parse(drop["date_posted"]))
+    conn.execute(
+        """UPDATE jobs SET
+               description = CASE WHEN length(:d) > length(description) THEN :d
+                                  ELSE description END,
+               date_posted = :date,
+               first_seen_at = min(first_seen_at, :first),
+               last_seen_at = max(last_seen_at, :last),
+               remote = max(remote, :remote),
+               apply_url = coalesce(apply_url, :apply),
+               location = coalesce(location, :location)
+           WHERE id = :id""",
+        {
+            "d": drop["description"],
+            "date": first_date.isoformat() if first_date else None,
+            "first": drop["first_seen_at"],
+            "last": drop["last_seen_at"],
+            "remote": drop["remote"],
+            "apply": drop["apply_url"],
+            "location": drop["location"],
+            "id": keep_id,
+        },
+    )
+    conn.execute("UPDATE job_sources SET job_id = ? WHERE job_id = ?", (keep_id, drop_id))
+    for table in ("scores", "applications"):
+        conn.execute(
+            f"UPDATE OR IGNORE {table} SET job_id = ? WHERE job_id = ?", (keep_id, drop_id)
+        )
+    conn.execute("DELETE FROM jobs WHERE id = ?", (drop_id,))

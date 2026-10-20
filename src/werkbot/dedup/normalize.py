@@ -16,15 +16,18 @@ import yaml
 # ---------- shared ----------
 
 _UMLAUTS = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue", "ß": "ss"})
+_COMBINING = re.compile(r"[\u0300-\u036f\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff\ufe20-\ufe2f]")
 
 
 def fold(text: str | None) -> str:
     """Lowercase, write umlauts out (ü -> ue), drop other accents (é -> e)."""
     if not text:
         return ""
-    text = text.lower().translate(_UMLAUTS)
-    text = unicodedata.normalize("NFKD", text)
-    return "".join(c for c in text if not unicodedata.combining(c))
+    text = text.lower()
+    if text.isascii():
+        return text
+    text = unicodedata.normalize("NFKD", text.translate(_UMLAUTS))
+    return _COMBINING.sub("", text)
 
 
 def _words(text: str, keep: str = "") -> str:
@@ -227,7 +230,8 @@ _REGIONS = {
 # Words around a city name: "Munich HQ", "Köln Zentrale", "Location Munich"
 _CITY_NOISE = {
     "hq", "headquarter", "headquarters", "zentrale", "location", "standort", "store",
-    "campus", "office", "buro", "germany", "deutschland",
+    "campus", "office", "buro", "germany", "deutschland", "available", "possible",
+    "moglich", "option", "optional", "only", "first", "friendly",
 }  # fmt: skip
 # English or older names -> one name (keys and values after _city_key).
 _CITY_ALIASES = {
@@ -240,27 +244,38 @@ _SPLIT = re.compile(r"[,;|/]|\s+-\s+|\s+(?:oder|or|und|and|&)\s+")
 _QUALIFIER = re.compile(r"\s+(?:am|an der|a|bei|in der|im|vor der|ob der)\s+.*$")
 
 
-def parse_location(location: str | None) -> tuple[list[str], bool]:
-    """'70565 Stuttgart, Deutschland' -> (['stuttgart'], False). Cities in order.
+def location_parts(location: str | None) -> tuple[list[tuple[str, str]], bool]:
+    """Each place in a location, as (full name, short name), and whether it says remote.
 
-    City names are a comparison key, not for display: umlauts become plain vowels
+    'Garching bei München, BY' -> ([('garching bei munchen', 'garching')], False)
+    The short name drops "am Main", "bei München" etc. Dedup compares short names; the
+    place lookup (filters) tries the full name first, so "Neustadt an der Waldnaab" is
+    not mistaken for Neustadt an der Weinstraße.
+
+    Names are comparison keys, not for display: umlauts become plain vowels
     ('München' -> 'munchen'), so every spelling a board uses gives the same key.
     """
     text = fold(location)
     remote = bool(_REMOTE_WORDS.search(text))
-    cities: list[str] = []
+    parts: list[tuple[str, str]] = []
     for part in _SPLIT.split(re.sub(r"\([^)]*\)", " ", text)):
         part = _words(re.sub(r"\b\d{4,5}\b", " ", part))  # postal codes
         if re.search(r"\d", part) or part.startswith(("kreis ", "landkreis ")):
             continue  # a street address ("Picassoplatz 1") or a district
-        part = _city_key(" ".join(w for w in part.split() if w not in _CITY_NOISE))
-        part = _CITY_ALIASES.get(part, part)
-        part = _QUALIFIER.sub("", part)
-        part = _CITY_ALIASES.get(part, part)
-        is_city = part and part not in _REGIONS and not _REMOTE_WORDS.search(part)
-        if is_city and part not in cities:
-            cities.append(part)
-    return cities, remote
+        part = _words(_REMOTE_WORDS.sub(" ", part))  # "Berlin I DE Remote" -> "berlin i de"
+        full = _city_key(" ".join(w for w in part.split() if w not in _CITY_NOISE))
+        full = _CITY_ALIASES.get(full, full)
+        short = _CITY_ALIASES.get(_QUALIFIER.sub("", full), _QUALIFIER.sub("", full))
+        is_city = short and short not in _REGIONS and not _REMOTE_WORDS.search(short)
+        if is_city and short not in [s for _, s in parts]:
+            parts.append((full, short))
+    return parts, remote
+
+
+def parse_location(location: str | None) -> tuple[list[str], bool]:
+    """'70565 Stuttgart, Deutschland' -> (['stuttgart'], False). Cities in order."""
+    parts, remote = location_parts(location)
+    return [short for _, short in parts], remote
 
 
 def normalize_city(location: str | None, remote: bool = False) -> str:

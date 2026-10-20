@@ -20,6 +20,8 @@ class Settings(BaseSettings):
     sources_path: Path = Path("data/sources.yaml")
     resume_path: Path = Path("data/master_resume.yaml")
     company_aliases_path: Path = Path("data/company_aliases.yaml")
+    filters_path: Path = Path("data/filters.yaml")
+    places_path: Path = Path("data/places.tsv")
     output_dir: Path = Path("output")
 
     # Polite scraping defaults

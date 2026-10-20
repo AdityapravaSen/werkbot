@@ -28,7 +28,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     cities         TEXT    NOT NULL DEFAULT '',   -- all normalized cities, '|'-separated
     job_types      TEXT    NOT NULL DEFAULT '[]', -- JSON list
     german_required INTEGER,                      -- 1 / 0 / NULL = unknown
-    reposted_at    TEXT                           -- when an expired job came back
+    reposted_at    TEXT,                          -- when an expired job came back
+    -- Phase 3 (job page details)
+    details_status TEXT,                          -- ok | no_description | failed
+    details_at     TEXT
 );
 
 CREATE TABLE IF NOT EXISTS job_sources (
@@ -41,6 +44,21 @@ CREATE TABLE IF NOT EXISTS job_sources (
     seen_at        TEXT    NOT NULL DEFAULT (datetime('now')),  -- last time this link was seen
     data           TEXT    NOT NULL DEFAULT '{}',  -- the full record from this source (JSON)
     UNIQUE (source, source_job_id)
+);
+
+-- Phase 3: the filter decision for each job (recomputed whenever filters run)
+CREATE TABLE IF NOT EXISTS job_filters (
+    job_id         INTEGER PRIMARY KEY REFERENCES jobs(id) ON DELETE CASCADE,
+    decision       TEXT    NOT NULL CHECK (decision IN ('keep', 'review', 'drop')),
+    reasons        TEXT    NOT NULL DEFAULT '[]', -- JSON list, the deciding ones first
+    work_mode      TEXT,                          -- onsite | hybrid | remote
+    distance_km    REAL,
+    places         TEXT    NOT NULL DEFAULT '',
+    german_level   TEXT,                          -- none | plus | good | required | fluent
+    ad_language    TEXT,                          -- en | de | NULL
+    kinds          TEXT    NOT NULL DEFAULT '[]',
+    is_tech        INTEGER,
+    filtered_at    TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS scores (
@@ -88,6 +106,8 @@ ADDED_COLUMNS = {
         "job_types": "TEXT NOT NULL DEFAULT '[]'",
         "german_required": "INTEGER",
         "reposted_at": "TEXT",
+        "details_status": "TEXT",
+        "details_at": "TEXT",
     },
     "job_sources": {"data": "TEXT NOT NULL DEFAULT '{}'"},
 }

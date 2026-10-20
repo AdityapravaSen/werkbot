@@ -84,6 +84,12 @@ def scrape(
     ),
     show: int = typer.Option(0, "--show", help="Print the first N jobs as a table."),
     save: bool = typer.Option(True, "--save/--no-save", help="Merge duplicates into the DB."),
+    filter_jobs: bool = typer.Option(
+        True, "--filter/--no-filter", help="Run the filters after saving (werkbot filter)."
+    ),
+    details: bool = typer.Option(
+        True, "--details/--no-details", help="Fetch missing descriptions before filtering."
+    ),
 ) -> None:
     """Scrape enabled sources, save raw results to output/raw/, merge them into the DB."""
     settings = get_settings()
@@ -141,6 +147,8 @@ def scrape(
     console.print(f"\n[bold]{len(all_jobs)} jobs total[/bold], {failed} source(s) failed")
     logger.info("TOTAL {} jobs from {} sources, {} failed", len(all_jobs), len(summary), failed)
     db_ok = _save_to_db(all_jobs, settings) if save else True
+    if save and filter_jobs and db_ok:
+        _run_filters(settings, details=details, show=0)
 
     if show and all_jobs:
         table = Table("Posted", "Title (Ctrl+click to open)", "Company", "Location", "Source")
@@ -247,6 +255,105 @@ def _save_to_db(
 def _is_page_watch(job: Job, sources: dict[str, Source]) -> bool:
     source = sources.get(job.source)
     return source is not None and source.group == SourceGroup.WATCH
+
+
+@app.command("filter")
+def filter_command(
+    details: bool = typer.Option(
+        True, "--details/--no-details", help="Fetch missing descriptions from job pages first."
+    ),
+    show: int = typer.Option(20, "--show", help="Print the first N kept jobs."),
+) -> None:
+    """Apply data/filters.yaml (location, role, language) to the jobs in the database."""
+    _run_filters(get_settings(), details=details, show=show)
+
+
+def _run_filters(settings: Settings, details: bool, show: int) -> None:
+    from datetime import UTC, datetime
+
+    from werkbot.details import fetch_details, jobs_needing_details
+    from werkbot.filters.config import load_filter_config
+    from werkbot.filters.places import Gazetteer
+    from werkbot.filters.run import Filters, export_csv, load_jobs, run_filters, top_reasons
+
+    config = load_filter_config(settings.filters_path)
+    sources = {s.name: s for s in load_sources(settings.sources_path, include_disabled=True)}
+    try:
+        filters = Filters(config, Gazetteer.load(settings.places_path), sources)
+    except (ValueError, FileNotFoundError) as exc:
+        console.print(f"[red]Filter settings problem:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    db.init_db(settings.db_path)
+    conn = db.connect(settings.db_path)
+    try:
+        if details:
+            # Only fetch pages for jobs that can still pass (location and role, from the list)
+            passing = [j.id for j in load_jobs(conn) if filters.judge(j, False).decision != "drop"]
+            rows = jobs_needing_details(conn, config.details, passing, datetime.now(UTC))
+            if rows:
+                todo = min(len(rows), config.details.max_per_run)
+                console.print(
+                    f"\nFetching job pages for {todo} of {len(rows)} jobs without a "
+                    "description (polite pauses; this takes a few minutes) ..."
+                )
+                stats = fetch_details(
+                    conn,
+                    rows,
+                    config.details,
+                    settings,
+                    load_aliases(settings.company_aliases_path),
+                )
+                console.print(
+                    f"Job pages: {stats.ok} descriptions, {stats.no_description} without one, "
+                    f"{stats.failed} failed, {stats.companies_found} companies found "
+                    f"({stats.merged} merged as duplicates)"
+                )
+                if stats.skipped_sites:
+                    console.print(f"[yellow]Rate-limited, retried next run:[/yellow] "
+                                  f"{', '.join(sorted(stats.skipped_sites))}")  # fmt: skip
+                logger.info("DETAILS {}", stats)
+
+        counts = run_filters(conn, filters)
+        csv_path = settings.output_dir / "filtered.csv"
+        export_csv(conn, csv_path)
+        console.print(
+            f"\n[bold]Filters:[/bold] [green]{counts['keep']} keep[/green], "
+            f"[yellow]{counts['review']} review[/yellow], [red]{counts['drop']} drop[/red]"
+        )
+        logger.info("FILTER {}", dict(counts))
+        for decision, color in (("review", "yellow"), ("drop", "red")):
+            reasons = top_reasons(conn, decision)
+            if reasons:
+                text = ", ".join(f"{reason} ({n})" for reason, n in reasons)
+                console.print(f"  [{color}]{decision}[/{color}] mostly: {escape(text)}")
+        if show:
+            _show_kept(conn, show)
+        console.print(f"[dim]Every decision with its reasons: {csv_path}[/dim]")
+    finally:
+        conn.close()
+
+
+def _show_kept(conn, limit: int) -> None:
+    rows = conn.execute(
+        """SELECT j.title, j.company, f.places, f.distance_km, f.work_mode, f.german_level,
+                  j.main_url
+           FROM job_filters f JOIN jobs j ON j.id = f.job_id
+           WHERE f.decision = 'keep' AND j.status != 'expired'
+           ORDER BY j.first_seen_at DESC, f.distance_km LIMIT ?""",
+        (limit,),
+    ).fetchall()
+    if not rows:
+        return
+    table = Table("Title (Ctrl+click to open)", "Company", "Where", "Mode", "German")
+    for r in rows:
+        where = f"{r['places'] or '?'}" + (
+            f" ({r['distance_km']:.0f} km)" if r["distance_km"] else ""
+        )
+        title = f"[link={r['main_url']}]{escape(r['title'])}[/link]"
+        table.add_row(title, escape(r["company"]), escape(where), r["work_mode"] or "",
+                      r["german_level"] or "")  # fmt: skip
+    console.print(table)
 
 
 @app.command("check-db")

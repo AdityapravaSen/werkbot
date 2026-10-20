@@ -11,6 +11,9 @@ def html_to_text(html: str | None) -> str:
     """Turn an HTML job description into readable plain text."""
     if not html:
         return ""
+    # Line breaks in the HTML source are just spaces (pages wrap long paragraphs);
+    # real line breaks come from the block elements below.
+    html = re.sub(r"\s+", " ", html)
     tree = LexborHTMLParser(html)
     for tag in ("script", "style"):
         for node in tree.css(tag):
@@ -20,6 +23,7 @@ def html_to_text(html: str | None) -> str:
         node.insert_after("\n")
     text = tree.text(separator="")
     text = re.sub(r"[ \t\xa0]+", " ", text)
+    text = re.sub(r" *\n *", "\n", text)  # no spaces at the start or end of a line
     text = re.sub(r"\n\s*\n+", "\n\n", text)
     return text.strip()
 

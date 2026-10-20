@@ -1,0 +1,214 @@
+# Filters (Phase 3): which jobs you see. Change anything here, then run: werkbot filter
+#
+# Every job gets one decision:
+#   keep    fits all rules
+#   review  probably fits, but something is unclear (shown, marked with the reason)
+#   drop    clearly does not fit (the reason is saved; see output/filtered.csv)
+#
+# Text matching: words are matched as whole words, without case or umlauts
+# ("Büro" = "buero" = "Buro"). A word ending in * matches anything that starts with it
+# ("entwickl*" = Entwickler, Entwicklung); a word starting with * matches the end of a
+# German compound ("*informatik" = Wirtschaftsinformatik). A word written in CAPITALS only
+# matches in capitals ("IT" matches "IT-Support" but not "it").
+
+location:
+  home: Kaiserslautern
+  max_distance_km: 200        # straight line from home
+  # Places further away that are still easy by train. A place counts if its fastest
+  # connection is at most max_train_hours. Times are the fastest DB connection from
+  # Kaiserslautern Hbf (bahn.de, checked Oct 2026). Add places in the same format.
+  max_train_hours: 3.0
+  train_times:
+    Köln: "2:27"
+    Ulm: "2:22"
+    Düsseldorf: "2:55"
+    Würzburg: "2:57"
+    Augsburg: "3:03"
+    Aachen: "3:29"
+    München: "3:34"
+    Dortmund: "3:43"
+    Essen: "3:44"
+    Nürnberg: "3:56"
+  countries: [DE]             # jobs in other countries are dropped (even if close, e.g. Luxembourg)
+  # Work mode, for jobs OUTSIDE the area above (jobs inside the area are always fine):
+  remote_outside_area: keep   # fully remote ("100% remote", "deutschlandweit")
+  hybrid_outside_area: review # "Homeoffice möglich", "teilweise remote": still means trips to the office
+  unknown_place: review       # no city given (e.g. only "Germany"), or a place not in data/places.tsv
+
+language:
+  # How each level of required German is handled. The level comes from what the ad says
+  # about German (also in German: "fließende Deutschkenntnisse", "Deutsch von Vorteil").
+  fluent: drop                # fluent / very good / native / C1 / C2 / verhandlungssicher / "German-speaking"
+  required: review            # German required, but no level given ("Deutschkenntnisse erforderlich")
+  good: keep                  # good German ("gute Deutsch- und Englischkenntnisse"), B1/B2
+  plus: keep                  # a plus / basic / "von Vorteil" / "wünschenswert"
+  # The ad is written in German and says nothing about language. Usually means German at
+  # work, but not always (many tech teams speak English).
+  german_ad_no_mention: review
+
+role:
+  # The job must be one of these kinds (title, job type or description):
+  kinds: [working_student, internship, part_time]   # also possible: thesis
+  # A job that is clearly another kind is dropped:
+  not_wanted: [full_time_only, apprenticeship, dual_study, phd]
+  # Field: at least one tech word, and not mainly a non-tech job.
+  tech_words:
+    - "software*"                 # also Softwareentwicklung, Softwarearchitektur
+    - "entwickl*"
+    - "*entwickler"               # Softwareentwickler, Webentwickler
+    - "anwendungsentwickl*"
+    - "developer*"
+    - "programm*"
+    - "engineer*"
+    - "ingenieur*"
+    - "*informatik"               # Informatik, Wirtschaftsinformatik
+    - "computer*"
+    - "IT"
+    - "IT-*"
+    - data
+    - "daten*"
+    - "machine learning"
+    - "deep learning"
+    - "ML"
+    - "AI"
+    - "KI"
+    - "künstliche intelligenz"
+    - "artificial intelligence"
+    - "llm*"
+    - "genai"
+    - "nlp"
+    - "computer vision"
+    - "analytics"
+    - "data scien*"
+    - "datascien*"
+    - "scientist"
+    - "devops"
+    - "mlops"
+    - "cloud"
+    - "backend"
+    - "frontend"
+    - "fullstack"
+    - "full stack"
+    - "full-stack"
+    - "web*"
+    - "app"
+    - "python"
+    - "java"
+    - "javascript"
+    - "typescript"
+    - "react"
+    - "sql"
+    - "c++"
+    - "c#"
+    - ".net"
+    - "rust"
+    - "golang"
+    - "linux"
+    - "embedded"
+    - "firmware"
+    - "hardware"
+    - "elektronik*"
+    - "electronic*"
+    - "robot*"
+    - "automati*"
+    - "simulation"
+    - "algorithm*"
+    - "security"
+    - "cyber*"
+    - "netzwerk*"
+    - "network*"
+    - "system*"
+    - "infrastru*"
+    - "admin*"
+    - "test automation"
+    - "testing"
+    - "qa"
+    - "sap"
+    - "erp"
+    - "digitali*"
+    - "mathemat*"
+    - "research"
+    - "forschung"
+    - "fuzzing"
+    - "visualisierung"
+    - "visualization"
+    - "ux"
+    - "ui"
+  non_tech_words:
+    - marketing
+    - "social media"
+    - "vertrieb*"
+    - "sales"
+    - "verkauf*"
+    - "account management"
+    - "key account*"
+    - "business development"
+    - "sales development"
+    - "talent development"
+    - "lead generation"
+    - "growth"
+    - "recruit*"
+    - "HR"
+    - "human resources"
+    - "personalwesen"
+    - "personalabteilung"
+    - "personalmanagement"
+    - "talent*"
+    - "buchhaltung"
+    - "accounting"
+    - "controlling"
+    - "finance"
+    - "finanz*"
+    - "steuerberatung"
+    - "steuerrecht"
+    - "tax"
+    - "audit"
+    - "legal"
+    - "rechtsabteilung"
+    - "office management"
+    - "back office"
+    - "front office"
+    - "büro*"
+    - "assistenz"
+    - "kundenservice"
+    - "customer service"
+    - "customer success"
+    - "customer support"
+    - "event*"
+    - "kommunikation"
+    - "communication*"
+    - "PR"
+    - "content"
+    - "redaktion"
+    - "journalis*"
+    - "grafikdesign*"
+    - "mediendesign"
+    - "einkauf"
+    - "facility*"
+    - "procurement"
+    - "logistik"
+    - "logistics"
+    - "lager*"
+    - "immobilien*"
+    - "real estate"
+    - "gastronomie"
+    - "hotel*"
+    - "pflege*"
+    - "patient*"
+    - "arztpraxis"
+  # Sources that only list tech jobs: a title without tech or non-tech words counts as tech.
+  tech_sources:
+    [connecticum, efellows, germantechjobs, wearedevelopers, workingstudentjobs, foorilla,
+     dfki, dfki_hiwi, mpi_inf_d2, mpi_inf_d6]
+
+details:
+  # Descriptions are fetched from the job page for jobs that pass the location and role
+  # filters but have no description yet (needed for the language filter and scoring).
+  min_description_chars: 300  # shorter than this counts as "no description"
+  delay_s: 2                  # between two requests to the same site
+  max_per_run: 150            # all sites together; the rest is fetched next run
+  retry_failed_after_days: 3
+  per_site:                   # stricter limits for some sites
+    linkedin.com: {delay_s: 5, max_per_run: 40}
+    # connecticum's job pages only show the job's facts, not the ad itself (checked Oct 2026)
+    connecticum.de: {skip: true}

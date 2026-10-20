@@ -1,6 +1,7 @@
 # All job sources. Adding or removing a site is a config change, not a code change.
 # group: A = API/feed, B = HTML with pages, C = JavaScript-loaded, D = page watcher, E = LinkedIn
 # adapter: name of the adapter in src/werkbot/adapters/
+# remote_means: remote (default) | hybrid: what the board's "remote" flag means.
 # kind: employer | board (default) | aggregator. When one job is on several sites, the
 #       link from the best kind is shown first: the employer's own site > board > aggregator.
 
@@ -18,6 +19,7 @@
 - name: arbeitsagentur
   group: A
   adapter: arbeitsagentur
+  remote_means: hybrid   # its remote flag means "home office possible"
   url: https://rest.arbeitsagentur.de/jobboerse/jobsuche-service
   params:
     was: Werkstudent
@@ -64,6 +66,7 @@
 - name: wearedevelopers
   group: A
   adapter: wearedevelopers
+  remote_means: hybrid   # its remote flag means "home office possible"
   url: https://www.wearedevelopers.com/jobs.md
   params:
     q: working student
@@ -88,6 +91,7 @@
 - name: efellows
   group: B
   adapter: efellows
+  remote_means: hybrid   # its remote flag means "home office possible"
   url: https://jobs.e-fellows.net/jobs/it/werkstudent-duales-studium
   params:
     delay_s: 2

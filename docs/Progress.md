@@ -12,19 +12,17 @@ The full plan lives in [`PLAN.md`](PLAN.md).
 | 0 | Project setup | ✅ Done |
 | 1 | Scrapers | ✅ Done: all 14 sources built and live-tested (2026-10-16) |
 | 2 | Deduplication + SQLite | ✅ Done (2026-10-19) |
-| 3 | Filtering (language, location, role) | ⬜ Not started |
+| 3 | Filtering (location, role, language) + job page details | ✅ Built (2026-10-19), live run pending |
 | 4 | Fit scoring | ⬜ Not started |
 | 5 | Resume + cover letter tailoring (LaTeX) | ⬜ Not started |
 | 6 | Delivery + daily schedule | ⬜ Not started |
 
-**Tests:** 162 passing · **Phase 2 complete** (2026-10-19) · **Branch:** `phase-2-dedup`
+**Tests:** 298 passing · **Phase 3 built** (2026-10-19) · **Branch:** `phase-3-filters`
 
 ---
 
 ## Sources
 
-| # | Source | Group | Status | Notes |
-|---|---|---|---|---|
 Jobs = result of the first full run (2026-10-16), before dedup and filtering.
 
 | # | Source | Group | Jobs | Notes |
@@ -46,6 +44,18 @@ Jobs = result of the first full run (2026-10-16), before dedup and filtering.
 ---
 
 ## Changelog
+
+### 2026-10-19 (Phase 3: filters)
+- **All rules in `data/filters.yaml`**, nothing hardcoded. Every job gets `keep`, `review` (probably fits, something unclear) or `drop`, with the reasons. `werkbot filter` runs them; `scrape` runs them automatically after saving. All results: `output/filtered.csv`.
+- **Location** (`filters/location.py`, `filters/places.py`): within 200 km of Kaiserslautern (straight line), or a place in the train list that is ≤ 3 h by DB (Köln 2:27, Ulm 2:22, Düsseldorf 2:55, Würzburg 2:57; fastest connections from bahn.de). Fully remote jobs are kept anywhere in Germany; hybrid jobs outside the area go to review; other countries are dropped. Places are looked up offline in `data/places.tsv` (13,400 German towns + big cities nearby, from GeoNames).
+- **Work mode**: fully remote / hybrid / on site, from the location, title and description ("100% remote", "Homeoffice möglich", "kein Home Office"), and from each board's remote flag (`remote_means` in `sources.yaml`: on Arbeitsagentur, e-fellows and WeAreDevelopers it only means "home office possible").
+- **Language** (`filters/language.py`): reads what the ad says ABOUT German: fluent / very good / C1 / native → drop; required without a level → review; good / B1 / B2 → keep; a plus / basic / "nicht erforderlich" → keep; a German ad that says nothing → review. The word "Deutsch" alone decides nothing. If one board has the ad in English, that version decides.
+- **Role** (`filters/role.py`): working student / internship / part-time (title, job type or description); apprenticeship, dual study, PhD and full-time-only are dropped; the field needs tech words in the title (word lists in the config). Tech-only boards count as tech when the title has no field words.
+- **Job page details** (`details.py`): for jobs that pass location + role but have no description, the job page is read (JSON-LD JobPosting → microdata → known page parts → main text). Polite: 2 s between requests to one site, at most 150 pages per run (LinkedIn 5 s / 40), a site that rate-limits is skipped for the run, failed pages are retried after 3 days. foorilla's missing company names are filled in from the page, and the job is merged if it turns out to be a duplicate.
+- **Database:** new table `job_filters`; `jobs.details_status` / `details_at`. Added automatically.
+- Checked against the 1,069 jobs of the first full run: 103 dropped for fluent German (all checked by hand), 367 too far, 219 not tech; nearly all "review" are jobs without a description yet.
+
+### 2026-10-19 (Phase 2: checked against a full real run)
 
 ### 2026-10-19 (Phase 2: checked against a full real run)
 All 1,127 jobs from the first full run were checked for wrong merges and missed duplicates. Every merge was correct. Fixes from what was found:
@@ -119,6 +129,13 @@ All 1,127 jobs from the first full run were checked for wrong merges and missed 
 
 | Date | Problem | Cause | Fix |
 |---|---|---|---|
+| 10-19 | "German is a plus" counted as "fluent" in "Fluent English, German is a plus" | A level word was matched to German just because both were in one sentence | Each level word belongs to one language: the one right after it ("fluent English") or right before it ("German is a plus"), within 30 characters |
+| 10-19 | "sehr gute Deutsch- oder Englischkenntnisse" dropped | "oder" means either language is enough | Languages joined by "oder/or" make German a plus |
+| 10-19 | "Werkstudent Sales/Business Development" counted as tech | The tech word "develop*" | Removed; longer phrases ("business development") win over words inside them |
+| 10-19 | "Werkstudent Softwareentwicklung" not counted as tech | German compound: "software" is not a separate word | Word lists support `software*` and `*informatik` |
+| 10-19 | "Politik und Gremien", "Facility Management" kept as tech | Every description mentions "Daten", "MS Office", "technisch" | Tech words in the description alone never keep a job (→ review); "technical/technisch" removed |
+| 10-19 | connecticum job pages read as descriptions | The page has no ad text, only a list of other jobs | connecticum is skipped for details; page text is only used if it mentions the job's title |
+| 10-19 | A recruiter's name and e-mail in a test page | Real pages were copied as fixtures | Replaced with placeholders |
 | 10-19 | "Karlsruhe, BW, DE" and "Stuttgart, BW, DE" counted as the same place | "BW" (and "Württemberg", street names …) was read as a second city, and any shared city counted | State codes and regions are not cities; only a job's main city is compared |
 | 10-19 | E.ON became company "on" | The "E." looked like the start of "e.V." | Remove only "e.V." / "e.K." as a whole |
 | 10-19 | foorilla jobs that are on other boards were not merged (24 pairs) | foorilla's list has no company name | Kept apart for now; Phase 3 reads the company from the job page, then the normal rules apply |
@@ -169,6 +186,11 @@ All 1,127 jobs from the first full run were checked for wrong merges and missed 
 | Test fixtures are trimmed copies of real pages | Tests check against the actual markup, not what we assume it looks like |
 | WeAreDevelopers: read Markdown, not HTML cards | Plain text with labelled fields; far less likely to break on a redesign |
 | Fit score, not "chance of getting hired" | No tool can predict hiring honestly |
+| Three decisions (keep / review / drop), not two | A filter that is unsure shouldn't hide a job; "review" jobs are shown with the reason |
+| Places offline (`data/places.tsv`), not a geocoding API | No API key, no rate limit, same answer every time; rebuilt with `scripts/build_places.py` |
+| Train times as a short list in the config, not a live DB API | The free DB APIs are unofficial and often down; the 10 relevant cities were looked up once |
+| Language rules per level, not "contains Deutsch" | Many English-friendly ads mention German as "a plus" or ask for "gute Deutschkenntnisse" |
+| Only the title decides the field | Descriptions always mention tech-sounding words (MS Office, Daten, Digitalisierung) |
 | Dedup leans towards keeping jobs apart | A missed duplicate shows a job twice; a wrong merge hides a job you might want |
 | English and German versions of one posting count as one job when their titles normalize the same | Same position; all links are kept, so Phase 3 can pick the English one |
 | Company aliases live in `data/company_aliases.yaml` | Adding an employer's other name is a config change |
@@ -187,7 +209,12 @@ All 1,127 jobs from the first full run were checked for wrong merges and missed 
 - **Descriptions are missing** for connecticum, e-fellows, Fraunhofer, germantechjobs and workingstudentjobs (list pages only). The probe detail pages show e-fellows + workingstudentjobs have JSON-LD `JobPosting` and Fraunhofer has microdata, so one shared "fetch description" step can cover most sites.
 - **germantechjobs has very few student jobs** (≈40 internships of 1093, 38 English). Kept, but it's a low-yield source.
 - **Arbeitnow takes ~5 min** (3s × all pages). Fine for a daily run.
-- **foorilla has no company names**, so its copies of jobs from other boards (≈24 in the first run) aren't merged until Phase 3 reads the company from each job page.
+- **Job pages not yet checked live** (no saved copy): WeAreDevelopers, foorilla, LinkedIn, DFKI. The generic reader handles them (or leaves them empty); the first real run will show how well. LinkedIn may block page requests; those jobs then stay "review".
+- **connecticum has no description anywhere** (not in the list, not on the job page), so its jobs stay "review" for the language. The page says the company's language ("Firmensprache"), which could be used later.
+- **Some small municipalities are missing** from the places table (e.g. Ammerbuch, Karlstein am Main, Parsdorf); their jobs go to review.
+- **Same-name places** are picked by state hint, then population ("Wangen, Kreis Göppingen" picks the wrong Wangen). Rare.
+- **Hybrid jobs outside the area** go to review (55 in the first run, mostly Munich/Berlin/Hamburg). Set `hybrid_outside_area: drop` to hide them.
+- **foorilla has no company names** in its list; the job page fills them in (Phase 3 details), then duplicates are merged.
 - **Ramstein's permanent and temporary "Elektroniker" posts** (same title and city, two IDs) are merged into one job. Both links are kept; the descriptions differ.
 - **A board listing one job twice with slightly different titles** stays two jobs (connecticum has the Fraunhofer backend job with and without " - C/C++"). The price of never fuzzy-merging within one board.
 - **English/German twins are only merged when the titles normalize the same.** "Student Assistant Windows Binary Fuzzing" = "Studentische Hilfskraft im Bereich Windows Binary Fuzzing" (merged), but "… Backend Development …" vs "… Backend-Entwicklung …" stays two jobs (no translation of topic words).
@@ -198,5 +225,5 @@ All 1,127 jobs from the first full run were checked for wrong merges and missed 
 
 ## Next
 
-1. Phase 3: read foorilla's company from the job page (then its duplicates merge)
-2. Phase 3: filters (language, location, role) + shared "fetch description" step for sources whose lists have no description
+1. First live run with job page details; check `output/filtered.csv` (especially "review") and tune `data/filters.yaml`
+2. Phase 4: fit scoring against the resume (needs `data/master_resume.yaml` and a free Gemini/Groq API key)

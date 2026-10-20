@@ -13,7 +13,7 @@ scrape → normalize → deduplicate → filter → score → tailor → deliver
 Requires [uv](https://docs.astral.sh/uv/) (it installs the right Python for you).
 
 ```bash
-git clone https://github.com/AdityapravaSen/werkbot.git
+git clone https://github.com/aritra1311/werkbot.git
 cd werkbot
 uv sync --group dev          # creates .venv and installs everything
 cp .env.example .env         # then add your API keys
@@ -39,8 +39,9 @@ uv sync --group dev --all-extras       # everything
 |---|---|
 | `werkbot sources [--all]` | List configured sources and which adapters are built |
 | `werkbot init-db` | Create the SQLite database (safe to rerun) |
-| `werkbot scrape [-s NAME] [--no-save]` | Scrape all enabled sources (or some), then merge them into the database |
+| `werkbot scrape [-s NAME] [--no-save] [--no-filter]` | Scrape all enabled sources (or some), merge them into the database, then filter |
 | `werkbot dedup [--dry-run]` | Merge the last raw results (`output/raw/`) into the database without scraping; `--dry-run` only shows the duplicates |
+| `werkbot filter [--no-details] [--show N]` | Apply `data/filters.yaml` (location, role, language): every job becomes keep / review / drop; results in `output/filtered.csv` |
 | `werkbot check-db` | Fail if any duplicate jobs slipped into the database |
 
 ## Project layout
@@ -76,3 +77,10 @@ This repo is public. Personal files are git-ignored: `.env`, `data/master_resume
 uv run pytest
 uv run ruff check . && uv run ruff format .
 ```
+
+## Data credits
+
+`data/places.tsv` (towns and coordinates for the location filter) is built from
+[GeoNames](https://www.geonames.org) data, licensed under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Rebuild it with
+`uv run --with geonamescache==3.0.2 python scripts/build_places.py`.

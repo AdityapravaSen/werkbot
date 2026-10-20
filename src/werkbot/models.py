@@ -26,6 +26,8 @@ class Source(BaseModel):
     # Which link wins when the same job is on several sites (dedup):
     # employer = the company's own careers site > board > aggregator (copies other sites)
     kind: Literal["employer", "board", "aggregator"] = "board"
+    # What the board's "remote" flag means: really remote, or only "home office possible"
+    remote_means: Literal["remote", "hybrid"] = "remote"
     params: dict = Field(default_factory=dict)
     notes: str = ""
 
